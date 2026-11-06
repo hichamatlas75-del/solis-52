@@ -63,11 +63,14 @@ test('applyMove : retourne la carte exposée et met à jour le score', () => {
   assert.equal(state.foundations[0].length, 1);
 });
 
-test('applyMove : refuse de déplacer une colonne commençant par un Roi vers une colonne vide', () => {
+test('applyMove : autorise de déplacer un Roi vers une colonne vide', () => {
   const { state } = R.generateDeal(1, 1, false);
   state.tableau = [[], [], [], [], [], [], []];
   state.tableau[0] = [{ ...R.makeCard(12), faceUp: true }];
-  assert.equal(R.applyMove(state, { zone: 'tableau', col: 0, index: 0 }, { zone: 'tableau', col: 1 }), null);
+  const res = R.applyMove(state, { zone: 'tableau', col: 0, index: 0 }, { zone: 'tableau', col: 1 });
+  assert.ok(res);
+  assert.equal(state.tableau[1].length, 1);
+  assert.equal(state.tableau[0].length, 0);
 });
 
 test('pioche : tirage 1 et 3, puis recyclage', () => {
@@ -130,4 +133,30 @@ test('hasAnyMove : détecte une position bloquée', () => {
     state.tableau[i] = [{ ...R.makeCard(r), faceUp: true }]; // 4♠ ... 10♠ : même couleur, pas de As
   });
   assert.equal(R.hasAnyMove(state), false);
+});
+
+test('hasAnyMove : ne bloque pas si la pioche contient des cartes', () => {
+  const { state } = R.generateDeal(1, 1, false);
+  state.stock = [{ ...R.makeCard(5), faceUp: false }];
+  state.waste = [];
+  state.foundations = [[], [], [], []];
+  state.tableau = [[], [], [], [], [], [], []];
+  [3, 4, 5, 6, 7, 8, 9].forEach((r, i) => {
+    state.tableau[i] = [{ ...R.makeCard(r), faceUp: true }];
+  });
+  assert.equal(R.hasAnyMove(state), true);
+});
+
+test('findHint : propose une action valide via heuristique', () => {
+  const { state } = R.generateDeal(1, 1, false);
+  state.stock = [];
+  state.waste = [];
+  state.foundations = [[], [], [], []];
+  state.tableau = [[], [], [], [], [], [], []];
+  // As de pique au sommet de la colonne 0
+  state.tableau[0] = [{ ...R.makeCard(0), faceUp: true }];
+  const hint = R.findHint(state, 100);
+  assert.ok(hint);
+  assert.equal(hint.target.zone, 'foundation');
+  assert.equal(hint.target.col, 0);
 });

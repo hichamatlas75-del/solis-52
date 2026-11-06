@@ -871,6 +871,9 @@
     tableauCols.forEach((colEl, colIdx) => {
       colEl.querySelectorAll('.card').forEach(el => el.remove());
       const cards = state.tableau[colIdx];
+      if (cards.length && !cards[cards.length - 1].faceUp) {
+        cards[cards.length - 1].faceUp = true;
+      }
       let top = 0;
       cards.forEach((card, idx) => {
         const el = createCardElement(card);
@@ -934,6 +937,9 @@
     spiderCols.forEach((colEl, colIdx) => {
       colEl.querySelectorAll('.card').forEach(el => el.remove());
       const cards = state.tableau[colIdx];
+      if (cards.length && !cards[cards.length - 1].faceUp) {
+        cards[cards.length - 1].faceUp = true;
+      }
       const movableStart = S.firstMovableIndex(cards);
 
       const downCount = cards.filter(c => !c.faceUp).length;
@@ -1082,7 +1088,6 @@
       spiderCols.forEach((colEl, c) => {
         if (source.col === c) return;
         if (!S.canMoveToColumn(state, lead, c)) return;
-        if (source.index === 0 && state.tableau[c].length === 0) return;
         const last = colEl.querySelector('.card:last-child') || colEl.querySelector('.slot');
         const r = last.getBoundingClientRect();
         const area = overlapArea(dragRect, { left: r.left - 6, right: r.right + 6, top: r.top - 10, bottom: r.bottom + 45 });
@@ -1092,17 +1097,22 @@
     }
 
     if (movingCards.length === 1 && source.zone !== 'foundation') {
-      foundationSlots.forEach((slot, f) => {
-        if (!R.canMoveToFoundation(state, lead, f)) return;
-        const area = overlapArea(dragRect, slot.getBoundingClientRect());
+      const f = R.SUIT_INDEX[lead.suit];
+      if (R.canMoveToFoundation(state, lead, f)) {
+        const slotRect = foundationSlots[f].getBoundingClientRect();
+        const area = overlapArea(dragRect, {
+          left: slotRect.left - 18,
+          right: slotRect.right + 18,
+          top: slotRect.top - 18,
+          bottom: slotRect.bottom + 18
+        });
         if (area > bestArea) { bestArea = area; best = { zone: 'foundation', col: f }; }
-      });
+      }
     }
 
     tableauCols.forEach((colEl, c) => {
       if (source.zone === 'tableau' && source.col === c) return;
       if (!R.canMoveToTableau(state, lead, c)) return;
-      if (source.zone === 'tableau' && source.index === 0 && state.tableau[c].length === 0) return;
       const last = colEl.querySelector('.card:last-child') || colEl.querySelector('.slot');
       const r = last.getBoundingClientRect();
       const area = overlapArea(dragRect, { left: r.left - 8, right: r.right + 8, top: r.top - 10, bottom: r.bottom + 45 });
@@ -1160,13 +1170,32 @@
   }
 
   foundationSlots.forEach((slot, f) => {
-    slot.addEventListener('click', () => { if (activeGame === 'klondike' && selectedSource) doMove(selectedSource, { zone: 'foundation', col: f }); });
+    slot.addEventListener('click', (e) => {
+      if (e.target.closest('.card')) return;
+      if (activeGame === 'klondike' && selectedSource) {
+        const moving = R.getMovingCards(state, selectedSource);
+        if (moving.length === 1) {
+          const targetF = R.SUIT_INDEX[moving[0].suit];
+          if (R.canMoveToFoundation(state, moving[0], targetF)) {
+            doMove(selectedSource, { zone: 'foundation', col: targetF });
+            return;
+          }
+        }
+        doMove(selectedSource, { zone: 'foundation', col: f });
+      }
+    });
   });
   tableauCols.forEach((colEl, c) => {
-    colEl.addEventListener('click', () => { if (activeGame === 'klondike' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c }); });
+    colEl.addEventListener('click', (e) => {
+      if (e.target.closest('.card')) return;
+      if (activeGame === 'klondike' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c });
+    });
   });
   spiderCols.forEach((colEl, c) => {
-    colEl.addEventListener('click', () => { if (activeGame === 'spider' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c }); });
+    colEl.addEventListener('click', (e) => {
+      if (e.target.closest('.card')) return;
+      if (activeGame === 'spider' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c });
+    });
   });
 
   document.body.addEventListener('click', (e) => {

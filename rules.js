@@ -150,8 +150,6 @@
     if (target.zone === 'tableau') {
       if (source.zone === 'tableau' && source.col === target.col) return null;
       if (!canMoveToTableau(state, lead, target.col)) return null;
-      // Déplacer une colonne entière commençant par un Roi vers une colonne vide est inutile.
-      if (source.zone === 'tableau' && source.index === 0 && state.tableau[target.col].length === 0) return null;
       removeFromSource(state, source, moving.length);
       state.tableau[target.col].push(...moving);
       if (source.zone === 'waste') state.score += 5;
@@ -261,6 +259,7 @@
               if (reveals) moves.push({ k: 'tt', from, idx, to, p: 1 });
               else if (idx === 0) moves.push({ k: 'tt', from, idx, to, p: 4 });
               else if (exposesFoundation) moves.push({ k: 'tt', from, idx, to, p: 2 });
+              else moves.push({ k: 'tt', from, idx, to, p: 5 });
             }
           }
         }
@@ -407,26 +406,162 @@
     return null;
   }
 
-  /* Indice : premier coup d'une solution si trouvée, sinon null. */
+  /* Heuristique immédiate lorsque le solveur complet n'aboutit pas dans la limite de nœuds */
+  function findHeuristicMove(state) {
+    if (!state || isWon(state)) return null;
+
+    // 1. Déplacer vers une fondation (As, 2 ou carte valide)
+    for (let col = 0; col < 7; col++) {
+      const pile = state.tableau[col];
+      if (!pile.length) continue;
+      const top = pile[pile.length - 1];
+      if (top.faceUp) {
+        const f = SUIT_INDEX[top.suit];
+        if (canMoveToFoundation(state, top, f)) {
+          return { source: { zone: 'tableau', col, index: pile.length - 1 }, target: { zone: 'foundation', col: f } };
+        }
+      }
+    }
+    if (state.waste && state.waste.length > 0) {
+      const topWaste = state.waste[state.waste.length - 1];
+      const f = SUIT_INDEX[topWaste.suit];
+      if (canMoveToFoundation(state, topWaste, f)) {
+        return { source: { zone: 'waste', index: state.waste.length - 1 }, target: { zone: 'foundation', col: f } };
+      }
+    }
+
+    // 2. Déplacement dans le tableau qui dévoile une carte cachée
+    for (let from = 0; from < 7; from++) {
+      const srcCol = state.tableau[from];
+      const downCount = srcCol.filter(c => !c.faceUp).length;
+      if (downCount === 0) continue;
+      const card = srcCol[downCount];
+      if (!card || !card.faceUp) continue;
+      for (let to = 0; to < 7; to++) {
+        if (to === from) continue;
+        if (canMoveToTableau(state, card, to)) {
+          return { source: { zone: 'tableau', col: from, index: downCount }, target: { zone: 'tableau', col: to } };
+        }
+      }
+    }
+
+    // 3. Déplacer un Roi vers une colonne vide si cela dévoile une carte
+    for (let from = 0; from < 7; from++) {
+      const srcCol = state.tableau[from];
+      if (srcCol.length <= 1) continue;
+      for (let idx = 1; idx < srcCol.length; idx++) {
+        const card = srcCol[idx];
+        if (card.faceUp && card.rank === 13) {
+          for (let to = 0; to < 7; to++) {
+            if (to !== from && state.tableau[to].length === 0) {
+              return { source: { zone: 'tableau', col: from, index: idx }, target: { zone: 'tableau', col: to } };
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Défausse vers tableau
+    if (state.waste && state.waste.length > 0) {
+      const topWaste = state.waste[state.waste.length - 1];
+      for (let to = 0; to < 7; to++) {
+        if (canMoveToTableau(state, topWaste, to)) {
+          return { source: { zone: 'waste', index: state.waste.length - 1 }, target: { zone: 'tableau', col: to } };
+        }
+      }
+    }
+
+    // 5. Tout déplacement valide entre colonnes
+    for (let from = 0; from < 7; from++) {
+      const srcCol = state.tableau[from];
+      for (let idx = 0; idx < srcCol.length; idx++) {
+        const card = srcCol[idx];
+        if (!card.faceUp) continue;
+        for (let to = 0; to < 7; to++) {
+          if (to === from) continue;
+          if (!canMoveToTableau(state, card, to)) continue;
+          if (state.tableau[to].length === 0 && idx === 0) continue;
+          return { source: { zone: 'tableau', col: from, index: idx }, target: { zone: 'tableau', col: to } };
+        }
+      }
+    }
+
+    // 6. Piocher
+    if ((state.stock && state.stock.length > 0) || (state.waste && state.waste.length > 0)) {
+      return { draw: true };
+    }
+
+    // 7. Fondation vers tableau (si cela aide)
+    for (let f = 0; f < 4; f++) {
+      const fPile = state.foundations[f];
+      if (!fPile.length) continue;
+      const fTop = fPile[fPile.length - 1];
+      for (let to = 0; to < 7; to++) {
+        if (canMoveToTableau(state, fTop, to)) {
+          return { source: { zone: 'foundation', col: f, index: fPile.length - 1 }, target: { zone: 'tableau', col: to } };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /* Indice : premier coup d'une solution si trouvée, sinon heuristique constructive. */
   function findHint(state, nodeLimit) {
     const r = solve(toSolverState(state), { nodeLimit: nodeLimit || 15000 });
-    if (!r.solved || !r.path.length) return null;
-    return stepToUiMove(state, r.path[0]);
+    if (r.solved && r.path.length) {
+      return stepToUiMove(state, r.path[0]);
+    }
+    return findHeuristicMove(state);
   }
 
   /* Reste-t-il au moins un coup raisonnable ? */
   function hasAnyMove(state) {
-    const s = toSolverState(state);
-    if (genMoves(s, false).length) return true;
-    const reachable = s.stock.concat(s.waste);
-    return reachable.some(c => {
-      if (s.found[su(c)] === rk(c) - 1) return true;
-      return s.tab.some(col => {
-        if (!col.length) return rk(c) === 13;
-        const t = col[col.length - 1];
-        return rk(t) === rk(c) + 1 && isRed(t) !== isRed(c);
-      });
-    });
+    if (!state || isWon(state)) return false;
+
+    // S'il reste des cartes dans le talon / pioche, la partie n'est pas bloquée
+    if (state.stock && state.stock.length > 0) return true;
+
+    // S'il reste des cartes dans la défausse qu'on peut recycler ou jouer
+    if (state.waste && state.waste.length > 0) return true;
+
+    // Tableau vers fondation
+    for (let col = 0; col < 7; col++) {
+      const pile = state.tableau[col];
+      if (!pile.length) continue;
+      const top = pile[pile.length - 1];
+      if (top.faceUp) {
+        const f = SUIT_INDEX[top.suit];
+        if (canMoveToFoundation(state, top, f)) return true;
+      }
+    }
+
+    // Tableau vers tableau
+    for (let from = 0; from < 7; from++) {
+      const srcCol = state.tableau[from];
+      for (let idx = 0; idx < srcCol.length; idx++) {
+        const card = srcCol[idx];
+        if (!card.faceUp) continue;
+        for (let to = 0; to < 7; to++) {
+          if (to === from) continue;
+          if (!canMoveToTableau(state, card, to)) continue;
+          if (state.tableau[to].length === 0 && idx === 0) continue;
+          return true;
+        }
+      }
+    }
+
+    // Fondation vers tableau (autorisé en Solitaire pour débloquer une situation)
+    for (let f = 0; f < 4; f++) {
+      const fPile = state.foundations[f];
+      if (!fPile.length) continue;
+      const fTop = fPile[fPile.length - 1];
+      for (let to = 0; to < 7; to++) {
+        if (canMoveToTableau(state, fTop, to)) return true;
+      }
+    }
+
+    return false;
   }
 
   /* Génère une donne (reproductible depuis `seed`). Si `winnable`, vérifie qu'elle est résoluble. */

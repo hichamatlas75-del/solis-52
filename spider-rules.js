@@ -167,9 +167,6 @@
     const dst = state.tableau[target.col];
     if (!canMoveToColumn(state, moving[0], target.col)) return null;
 
-    // Éviter le coup inutile déplaçant toute une colonne vers une autre colonne vide
-    if (source.index === 0 && dst.length === 0) return null;
-
     const src = state.tableau[source.col];
     src.splice(source.index, moving.length);
     dst.push(...moving);
