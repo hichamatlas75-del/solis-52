@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Solis 52 : jeu de cartes de patience classique à 7 colonnes sur tapis de feutre." />
+  <title>Solis 52</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-felt="classic" data-cardback="blue">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <h1 class="brand">
+      <span class="brand-icon">☀</span>
+      <span>Solis 52</span>
+    </h1>
+
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">Score</span>
+        <span class="stat-value" id="score-val">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Temps</span>
+        <span class="stat-value" id="time-val">00:00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Coups</span>
+        <span class="stat-value" id="moves-val">0</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <select id="draw-mode" class="select-ctrl" title="Mode de tirage">
+        <option value="1">Tirage 1 carte</option>
+        <option value="3">Tirage 3 cartes</option>
+      </select>
+
+      <select id="felt-theme" class="select-ctrl" title="Couleur du tapis">
+        <option value="classic">Tapis Classique</option>
+        <option value="royal">Émeraude Casino</option>
+        <option value="midnight">Bleu Nuit</option>
+      </select>
+
+      <button id="btn-autocomplete" class="btn btn-gold" style="display: none;">
+        ⚡ Terminer auto
+      </button>
+
+      <button id="btn-undo" class="btn" disabled title="Annuler le dernier coup (Ctrl+Z)">
+        ↩ Annuler
+      </button>
+
+      <button id="btn-hint" class="btn" title="Afficher un indice (H)">
+        💡 Indice
+      </button>
+
+      <button id="btn-new" class="btn" title="Distribuer une nouvelle partie (N)">
+        🃏 Nouvelle partie
+      </button>
+    </div>
+  </header>
+
+  <!-- Solitaire Play Table -->
+  <main class="table-wrap">
+    <!-- Top Row: Stock, Waste, Empty Spacer, 4 Foundations -->
+    <section class="top-zone">
+      <div id="stock-slot" class="slot stock-slot" title="Cliquer pour piocher ou recycler">
+        <div class="slot-watermark">
+          <div class="stock-recycle-icon">↻</div>
+        </div>
+      </div>
+
+      <div id="waste-slot" class="slot waste-slot"></div>
+
+      <!-- Spacer Column -->
+      <div class="spacer-slot"></div>
+
+      <!-- 4 Foundations -->
+      <div class="slot foundation-slot" id="foundation-0" data-foundation="0" data-suit="♠">
+        <div class="slot-watermark">♠</div>
+      </div>
+      <div class="slot foundation-slot" id="foundation-1" data-foundation="1" data-suit="♥">
+        <div class="slot-watermark red-watermark">♥</div>
+      </div>
+      <div class="slot foundation-slot" id="foundation-2" data-foundation="2" data-suit="♣">
+        <div class="slot-watermark">♣</div>
+      </div>
+      <div class="slot foundation-slot" id="foundation-3" data-foundation="3" data-suit="♦">
+        <div class="slot-watermark red-watermark">♦</div>
+      </div>
+    </section>
+
+    <!-- Bottom Row: 7 Tableau Columns -->
+    <section class="tableau-zone" id="tableau-zone">
+      <div class="tableau-col" id="tableau-col-0" data-col="0"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+      <div class="tableau-col" id="tableau-col-1" data-col="1"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+      <div class="tableau-col" id="tableau-col-2" data-col="2"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+      <div class="tableau-col" id="tableau-col-3" data-col="3"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+      <div class="tableau-col" id="tableau-col-4" data-col="4"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+      <div class="tableau-col" id="tableau-col-5" data-col="5"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+      <div class="tableau-col" id="tableau-col-6" data-col="6"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+    </section>
+  </main>
+
+  <!-- Floating Drag Layer -->
+  <div id="drag-layer"></div>
+
+  <!-- Bouncing Cards Victory Canvas -->
+  <canvas id="victory-canvas"></canvas>
+
+  <!-- Victory Modal -->
+  <div id="victory-banner" class="victory-banner">
+    <h2 class="victory-title">🏆 Félicitations !</h2>
+    <div class="victory-stats" id="victory-stats"></div>
+    <button id="btn-victory-new" class="btn btn-gold">
+      🃏 Rejouer une partie
+    </button>
+  </div>
+
+  <!-- Footer Status Bar -->
+  <footer class="statusbar">
+    <div id="status-msg">Prêt — Glissez-déposez les cartes ou double-cliquez pour envoyer vers les fondations.</div>
+    <div class="status-shortcuts">
+      <span><kbd class="kbd">Double-clic</kbd> / <kbd class="kbd">Clic droit</kbd> Auto-envoi</span>
+      <span><kbd class="kbd">Ctrl+Z</kbd> Annuler</span>
+      <span><kbd class="kbd">H</kbd> Indice</span>
+      <span><kbd class="kbd">N</kbd> Nouvelle partie</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
