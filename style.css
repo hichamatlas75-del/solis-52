@@ -3,10 +3,11 @@
   --felt-secondary: #084c25;
   --felt-border: #06381b;
   --vw: 100vw;
+  --cols: 7;
   --board-pad-x: clamp(6px, 1.8vw, 18px);
   --safe-x: max(var(--board-pad-x), env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   --col-gap: clamp(4px, 1.2vw, 18px);
-  --card-w: min(108px, calc((var(--vw) - 2 * var(--safe-x) - 6 * var(--col-gap)) / 7));
+  --card-w: min(108px, calc((var(--vw) - 2 * var(--safe-x) - (var(--cols) - 1) * var(--col-gap)) / var(--cols)));
   --card-h: calc(var(--card-w) * 1.42);
   --card-radius: clamp(4px, 0.7vw, 8px);
   --stack-offset-down: clamp(7px, calc(var(--card-w) * 0.16), 16px);
@@ -16,6 +17,15 @@
   --gold-accent: #f3c64d;
   --card-back-1: #164e9f;
   --card-back-2: #0c3168;
+}
+
+body[data-game="spider"] {
+  --cols: 10;
+  --board-pad-x: clamp(4px, 1.4vw, 16px);
+  --col-gap: clamp(2.5px, 0.8vw, 12px);
+  --card-w: min(92px, calc((var(--vw) - 2 * var(--safe-x) - 9 * var(--col-gap)) / 10));
+  --stack-offset-down: clamp(5px, calc(var(--card-w) * 0.14), 13px);
+  --stack-offset-up: clamp(15px, calc(var(--card-w) * 0.27), 27px);
 }
 
 body[data-felt="royal"] {
@@ -75,11 +85,18 @@ html, body {
   z-index: 20;
 }
 
+.brand-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .brand {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-weight: 700;
   font-size: 16px;
   letter-spacing: 0.3px;
@@ -98,6 +115,44 @@ html, body {
   font-size: 18px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.35);
   border: 1px solid #ddd;
+}
+
+/* Onglets de sélection du jeu (Classique / Spider) */
+.game-tabs {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.36);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  gap: 3px;
+}
+
+.game-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.game-tab:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.game-tab.active {
+  background: linear-gradient(180deg, #f7d365 0%, #d89e17 100%);
+  color: #1c1300;
+  border-color: #ffe58f;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
 }
 
 .stats-bar {
@@ -191,7 +246,7 @@ html, body {
 /* Main Solitaire Board */
 .table-wrap {
   width: 100%;
-  max-width: calc(var(--card-w) * 7 + var(--col-gap) * 6 + 2 * var(--safe-x));
+  max-width: calc(var(--card-w) * var(--cols) + var(--col-gap) * (var(--cols) - 1) + 2 * var(--safe-x));
   margin: 0 auto;
   padding: 16px var(--safe-x) 60px;
   position: relative;
@@ -200,9 +255,9 @@ html, body {
 
 .top-zone {
   display: grid;
-  grid-template-columns: repeat(7, var(--card-w));
+  grid-template-columns: repeat(var(--cols), var(--card-w));
   column-gap: var(--col-gap);
-  margin-bottom: clamp(18px, 2.5vw, 28px);
+  margin-bottom: clamp(14px, 2.2vw, 26px);
   align-items: start;
 }
 
@@ -214,7 +269,7 @@ html, body {
 
 .tableau-zone {
   display: grid;
-  grid-template-columns: repeat(7, var(--card-w));
+  grid-template-columns: repeat(var(--cols), var(--card-w));
   column-gap: var(--col-gap);
   align-items: start;
   min-height: 420px;
@@ -776,4 +831,99 @@ body[data-fourcolor="on"] .foundation-slot[data-suit="♦"] .slot-watermark { co
 @media (max-width: 640px) {
   .controls .btn, .controls .select-ctrl { padding: 5px 8px; font-size: 12px; }
   .deal-badge { display: inline; }
+}
+
+/* ===== Spécificités Spider Solitaire ===== */
+.spider-stock-slot {
+  overflow: visible;
+}
+
+.spider-empty-icon {
+  font-size: calc(var(--card-w) * 0.36);
+  opacity: 0.7;
+}
+
+.deals-badge {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  z-index: 15;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f7d365 0%, #d89e17 100%);
+  color: #1c1300;
+  font-size: 11.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  border: 1px solid #fff3b0;
+  pointer-events: none;
+}
+
+/* Cartes face visible bloquées sous une suite d'enseigne différente en Spider */
+.card.spider-blocked {
+  background: #dfe5e2;
+  cursor: default;
+}
+
+.card.spider-blocked:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.32);
+}
+
+/* Icône centrale simplifiée pour le format 10 colonnes sur écran mobile étroit */
+.mobile-suit-emblem {
+  display: none;
+  font-size: calc(var(--card-w) * 0.44);
+  line-height: 1;
+}
+
+@media (max-width: 560px) {
+  .game-tab {
+    padding: 4px 9px;
+    font-size: 12px;
+  }
+
+  /* Sur mobile en mode Spider (10 colonnes), affichage épuré ultra-lisible */
+  body[data-game="spider"] .card.face-down {
+    padding: 1.5px;
+  }
+  body[data-game="spider"] .card-corner.top-left {
+    top: 1.5px;
+    left: 2px;
+  }
+  body[data-game="spider"] .card-corner.bottom-right {
+    display: none;
+  }
+  body[data-game="spider"] .corner-rank {
+    font-size: clamp(9.5px, calc(var(--card-w) * 0.30), 12.5px);
+  }
+  body[data-game="spider"] .corner-suit {
+    font-size: clamp(8.5px, calc(var(--card-w) * 0.25), 11px);
+  }
+  body[data-game="spider"] .card-center {
+    top: 28%;
+    bottom: 8%;
+    left: 10%;
+    right: 10%;
+  }
+  body[data-game="spider"] .pips-grid {
+    display: none;
+  }
+  body[data-game="spider"] .mobile-suit-emblem {
+    display: block;
+  }
+  body[data-game="spider"] .court-crown {
+    display: none;
+  }
+  body[data-game="spider"] .court-frame {
+    justify-content: center;
+    border-width: 1px;
+  }
+  body[data-game="spider"] .court-figure {
+    font-size: calc(var(--card-w) * 0.44);
+  }
 }

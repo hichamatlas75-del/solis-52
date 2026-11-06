@@ -1,7 +1,7 @@
 {
   "name": "solis-52",
-  "version": "2.0.0",
-  "description": "Solis 52 — jeu de patience à 7 colonnes (PWA installable)",
+  "version": "3.0.0",
+  "description": "Solis 52 — jeux de cartes Classique & Spider (PWA installable)",
   "private": true,
   "license": "MIT",
   "scripts": {

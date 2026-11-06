@@ -1,11 +1,12 @@
 /*
- * Solis 52 — interface (rendu, entrées, PWA).
- * Règles et solveur : rules.js — persistance : storage.js
+ * Solis 52 — interface unifiée (Patience Classique 7 col. & Spider 10 col., rendu, entrées, PWA).
+ * Règles : rules.js & spider-rules.js — persistance : storage.js
  */
 (() => {
   'use strict';
 
   const R = window.SolisRules;
+  const S = window.SpiderRules;
   const Store = window.SolisStorage;
   const SUITS = R.SUITS;
 
@@ -24,15 +25,19 @@
   const SUIT_NAMES = { '♠': 'pique', '♥': 'cœur', '♣': 'trèfle', '♦': 'carreau' };
   const RANK_NAMES = { 1: 'As', 11: 'Valet', 12: 'Dame', 13: 'Roi' };
 
-  /* ---------- État ---------- */
+  /* ---------- État actif et sessions par onglet ---------- */
   let settings = Store.getSettings();
+  let activeGame = settings.activeGame === 'spider' ? 'spider' : 'klondike';
+  const sessions = { klondike: null, spider: null };
+
   let state = null;
-  let history = [];          // instantanés JSON (annuler)
-  let redoStack = [];        // instantanés JSON (rétablir)
-  let initialOrder = null;   // ordre de la donne (rejouer)
+  let history = [];
+  let redoStack = [];
+  let initialOrder = null;
   let dealSeed = 0;
   let dealVerified = false;
   let dealDraw = 1;
+  let spiderSuits = 1;
   let timerSeconds = 0;
   let timerInterval = null;
   let clockStarted = false;
@@ -42,7 +47,8 @@
   let cascadeAnimId = null;
   let stuckNotified = false;
   let noAnimateNext = false;
-  let flipId = null;
+  let flipIds = new Set();
+  let dealtIds = new Set();
   let dragSession = null;
   let lastTap = { key: null, time: 0 };
   let audioCtx = null;
@@ -51,10 +57,24 @@
 
   /* ---------- DOM ---------- */
   const $ = (id) => document.getElementById(id);
+  const tabKlondike = $('tab-klondike');
+  const tabSpider = $('tab-spider');
+  const boardKlondike = $('board-klondike');
+  const boardSpider = $('board-spider');
+
+  // Classique DOM
   const stockSlot = $('stock-slot');
   const wasteSlot = $('waste-slot');
   const foundationSlots = Array.from(document.querySelectorAll('.foundation-slot'));
-  const tableauCols = Array.from(document.querySelectorAll('.tableau-col'));
+  const tableauCols = Array.from(document.querySelectorAll('#tableau-zone .tableau-col'));
+
+  // Spider DOM
+  const spiderStockSlot = $('spider-stock-slot');
+  const spiderDealsBadge = $('spider-deals-badge');
+  const spiderFoundationSlots = Array.from(document.querySelectorAll('.spider-foundation-slot'));
+  const spiderCols = Array.from(document.querySelectorAll('.spider-col'));
+
+  // Contrôles communs
   const scoreEl = $('score-val');
   const timeEl = $('time-val');
   const movesEl = $('moves-val');
@@ -65,14 +85,17 @@
   const btnMenu = $('btn-menu');
   const btnAutoComplete = $('btn-autocomplete');
   const drawModeSelect = $('draw-mode');
+  const spiderSuitsSelect = $('spider-suits');
   const feltSelect = $('felt-theme');
   const cardbackSelect = $('cardback');
   const optWinnable = $('opt-winnable');
+  const rowWinnable = $('row-winnable');
   const optFourColor = $('opt-fourcolor');
   const optSound = $('opt-sound');
   const statusMsg = $('status-msg');
   const dealBadge = $('deal-badge');
   const dealInfo = $('deal-info');
+  const statsHeading = $('stats-heading');
   const dragLayer = $('drag-layer');
   const victoryCanvas = $('victory-canvas');
   const victoryBanner = $('victory-banner');
@@ -86,6 +109,8 @@
 
   /* ---------- Utilitaires ---------- */
   const cloneState = () => JSON.stringify(state);
+  const activeBoard = () => (activeGame === 'spider' ? boardSpider : boardKlondike);
+  const activeRefSlot = () => (activeGame === 'spider' ? spiderStockSlot : stockSlot);
 
   function formatTime(sec) {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -144,12 +169,13 @@
   const sound = {
     move: () => tone(420, 0.07, 'triangle'),
     foundation: () => { tone(660, 0.08, 'triangle'); tone(880, 0.1, 'triangle', 0.05, 0.07); },
+    suite: () => [523, 659, 784].forEach((f, i) => tone(f, 0.16, 'triangle', 0.06, i * 0.09)),
     draw: () => tone(300, 0.05, 'square', 0.03),
     error: () => tone(140, 0.12, 'sawtooth', 0.04),
     win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.25, 'triangle', 0.07, i * 0.14))
   };
 
-  /* ---------- Chrono (pause automatique quand l'onglet est masqué) ---------- */
+  /* ---------- Chrono ---------- */
   function resumeClock() {
     if (timerInterval || !clockStarted || !state || state.won || document.hidden) return;
     timerInterval = setInterval(() => { timerSeconds++; updateHUD(); }, 1000);
@@ -158,17 +184,52 @@
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   }
   function startClock() {
-    if (!countedPlayed) { countedPlayed = true; Store.recordPlayed(); }
-    if (!clockStarted) { clockStarted = true; }
+    if (!countedPlayed) { countedPlayed = true; Store.recordPlayed(activeGame); }
+    if (!clockStarted) clockStarted = true;
     resumeClock();
   }
   function stopClock() { pauseClock(); clockStarted = false; }
 
-  /* ---------- Sauvegarde ---------- */
+  /* ---------- Sauvegarde et bascule d'onglet ---------- */
+  function snapshotCurrentSession() {
+    if (!state) return;
+    sessions[activeGame] = {
+      state,
+      history: history.slice(),
+      redoStack: redoStack.slice(),
+      initialOrder,
+      dealSeed,
+      dealVerified,
+      dealDraw,
+      spiderSuits,
+      timerSeconds,
+      clockStarted,
+      countedPlayed,
+      stuckNotified
+    };
+  }
+
+  function loadSessionObject(sess) {
+    state = sess.state;
+    history = sess.history || [];
+    redoStack = sess.redoStack || [];
+    initialOrder = sess.initialOrder || null;
+    dealSeed = sess.dealSeed || 1;
+    dealVerified = !!sess.dealVerified;
+    dealDraw = sess.dealDraw || 1;
+    spiderSuits = sess.spiderSuits || 1;
+    timerSeconds = sess.timerSeconds || 0;
+    clockStarted = !!sess.clockStarted;
+    countedPlayed = !!sess.countedPlayed;
+    stuckNotified = !!sess.stuckNotified;
+  }
+
   function persist() {
     if (!state || state.won) return;
+    snapshotCurrentSession();
     Store.saveGame({
-      v: 1,
+      v: 2,
+      mode: activeGame,
       state,
       history: history.slice(-15),
       timerSeconds,
@@ -176,35 +237,110 @@
       seed: dealSeed,
       verified: dealVerified,
       dealDraw,
+      spiderSuits,
       countedPlayed,
       clockStarted
-    });
+    }, activeGame);
   }
 
   function gameInProgress() { return state && state.moves > 0 && !state.won; }
 
-  /* ---------- Nouvelle partie ---------- */
+  function syncModeDOM() {
+    const isSpider = activeGame === 'spider';
+    document.body.dataset.game = activeGame;
+    tabKlondike.classList.toggle('active', !isSpider);
+    tabKlondike.setAttribute('aria-selected', String(!isSpider));
+    tabSpider.classList.toggle('active', isSpider);
+    tabSpider.setAttribute('aria-selected', String(isSpider));
+    boardKlondike.hidden = isSpider;
+    boardSpider.hidden = !isSpider;
+    drawModeSelect.hidden = isSpider;
+    spiderSuitsSelect.hidden = !isSpider;
+    if (rowWinnable) rowWinnable.hidden = isSpider;
+  }
+
+  function switchGameTab(nextMode) {
+    if (nextMode !== 'klondike' && nextMode !== 'spider') return;
+    if (nextMode === activeGame && state) return;
+
+    // Sauvegarder la partie de l'onglet qu'on quitte
+    if (state) {
+      isAutoCompleting = false;
+      pauseClock();
+      persist();
+    }
+    stopCascadeAnimation();
+    victoryBanner.classList.remove('active');
+    selectedSource = null;
+    clearHints();
+
+    activeGame = nextMode;
+    settings.activeGame = nextMode;
+    Store.saveSettings(settings);
+    syncModeDOM();
+    syncViewportWidth();
+
+    if (sessions[nextMode]) {
+      loadSessionObject(sessions[nextMode]);
+      if (activeGame === 'spider') spiderSuitsSelect.value = String(spiderSuits);
+      else drawModeSelect.value = String(dealDraw);
+      noAnimateNext = true;
+      render();
+      if (state.won) {
+        victoryBanner.classList.add('active');
+      } else {
+        resumeClock();
+      }
+      setStatus(activeGame === 'spider'
+        ? `Spider (${spiderSuits} couleur${spiderSuits > 1 ? 's' : ''}) — partie reprise.`
+        : `Classique (tirage ${dealDraw}) — partie reprise.`);
+      return;
+    }
+
+    const saved = Store.getSave(nextMode);
+    if (saved && saved.state && !saved.state.won) {
+      restoreGame(saved, nextMode);
+    } else {
+      newGame();
+    }
+  }
+
+  /* ---------- Nouvelle partie / Restauration ---------- */
   function randomSeed() { return Math.floor(Math.random() * 999999) + 1; }
 
   function newGame(opts = {}) {
     stopCascadeAnimation();
     victoryBanner.classList.remove('active');
-    if (gameInProgress() && countedPlayed) Store.recordAbandoned();
+    if (gameInProgress() && countedPlayed) Store.recordAbandoned(activeGame);
 
-    const drawCount = opts.drawCount || parseInt(drawModeSelect.value, 10) || 1;
-    if (opts.order) {
-      dealSeed = opts.seed || dealSeed;
-      initialOrder = opts.order.slice();
-      state = R.dealState(initialOrder, drawCount);
-      dealVerified = !!opts.verified && opts.verifiedDraw === drawCount;
-    } else {
+    if (activeGame === 'spider') {
+      const suits = opts.spiderSuits || parseInt(spiderSuitsSelect.value, 10) || settings.spiderSuits || 1;
       dealSeed = opts.seed || randomSeed();
-      const deal = R.generateDeal(dealSeed, drawCount, settings.winnable);
-      state = deal.state;
-      initialOrder = deal.order;
-      dealVerified = deal.verified;
+      spiderSuits = (suits === 2 || suits === 4) ? suits : 1;
+      state = S.dealSpider(dealSeed, spiderSuits);
+      initialOrder = null;
+      dealVerified = false;
+      spiderSuitsSelect.value = String(spiderSuits);
+      settings.spiderSuits = spiderSuits;
+    } else {
+      const drawCount = opts.drawCount || parseInt(drawModeSelect.value, 10) || settings.drawMode || 1;
+      if (opts.order) {
+        dealSeed = opts.seed || dealSeed;
+        initialOrder = opts.order.slice();
+        state = R.dealState(initialOrder, drawCount);
+        dealVerified = !!opts.verified && opts.verifiedDraw === drawCount;
+      } else {
+        dealSeed = opts.seed || randomSeed();
+        const deal = R.generateDeal(dealSeed, drawCount, settings.winnable);
+        state = deal.state;
+        initialOrder = deal.order;
+        dealVerified = deal.verified;
+      }
+      dealDraw = drawCount;
+      drawModeSelect.value = String(drawCount);
+      settings.drawMode = drawCount;
     }
-    dealDraw = drawCount;
+
     history = [];
     redoStack = [];
     selectedSource = null;
@@ -213,15 +349,19 @@
     countedPlayed = false;
     stopClock();
     timerSeconds = 0;
-    flipId = null;
+    flipIds.clear();
     noAnimateNext = true;
-    drawModeSelect.value = String(drawCount);
-    settings.drawMode = drawCount;
     Store.saveSettings(settings);
-    Store.clearSave();
+    Store.clearSave(activeGame);
+    snapshotCurrentSession();
     render();
     persist();
-    setStatus(`Nouvelle partie (tirage ${drawCount} carte${drawCount > 1 ? 's' : ''}). Bonne chance !`);
+
+    if (activeGame === 'spider') {
+      setStatus(`Nouvelle partie Spider (${spiderSuits} couleur${spiderSuits > 1 ? 's' : ''}). Formez 8 suites du Roi à l’As !`);
+    } else {
+      setStatus(`Nouvelle partie Classique (tirage ${dealDraw} carte${dealDraw > 1 ? 's' : ''}). Bonne chance !`);
+    }
   }
 
   function confirmNewGame(opts) {
@@ -230,28 +370,32 @@
     return true;
   }
 
-  function restoreGame(save) {
+  function restoreGame(save, mode) {
     state = save.state;
     history = Array.isArray(save.history) ? save.history : [];
     redoStack = [];
-    initialOrder = save.order;
-    dealSeed = save.seed;
+    initialOrder = save.order || null;
+    dealSeed = save.seed || 1;
     dealVerified = !!save.verified;
-    dealDraw = save.dealDraw || state.drawCount;
+    dealDraw = save.dealDraw || state.drawCount || 1;
+    spiderSuits = save.spiderSuits || state.suitCount || 1;
     timerSeconds = save.timerSeconds || 0;
     countedPlayed = !!save.countedPlayed;
     clockStarted = !!save.clockStarted;
-    drawModeSelect.value = String(state.drawCount);
+    stuckNotified = false;
+    if (mode === 'spider') spiderSuitsSelect.value = String(spiderSuits);
+    else drawModeSelect.value = String(dealDraw);
+    snapshotCurrentSession();
     noAnimateNext = true;
     render();
     resumeClock();
     setStatus('Partie précédente restaurée.');
   }
 
-  /* ---------- Création des cartes ---------- */
-  function createCardElement(card) {
+  /* ---------- Création des éléments carte ---------- */
+  function createCardElement(card, extraClass = '') {
     const el = document.createElement('div');
-    el.className = `card ${card.color} ${card.faceUp ? 'face-up playable' : 'face-down'}`;
+    el.className = `card ${card.color} ${card.faceUp ? 'face-up playable' : 'face-down'}${extraClass ? ' ' + extraClass : ''}`;
 
     if (!card.faceUp) {
       el.setAttribute('aria-label', 'Carte cachée');
@@ -263,7 +407,7 @@
     el.dataset.suit = card.suit;
     el.setAttribute('role', 'button');
     el.setAttribute('aria-label', cardName(card));
-    if (card.id === flipId) el.classList.add('just-flipped');
+    if (flipIds.has(card.id)) el.classList.add('just-flipped');
 
     let centerHTML = '';
     if (card.rank === 1) {
@@ -281,7 +425,7 @@
       const pips = (PIP_LAYOUTS[card.rank] || []).map(([r, c, flip]) =>
         `<span class="pip ${flip ? 'flip' : ''}" style="grid-row:${r};grid-column:${c};">${card.suit}</span>`
       ).join('');
-      centerHTML = `<div class="pips-grid">${pips}</div>`;
+      centerHTML = `<div class="pips-grid">${pips}</div><span class="mobile-suit-emblem">${card.suit}</span>`;
     }
 
     el.innerHTML = `
@@ -300,11 +444,17 @@
   }
 
   function undo() {
-    if (!history.length || isAutoCompleting || state.won) return;
+    if (!history.length || isAutoCompleting) return;
+    const wasWon = state.won;
     redoStack.push(cloneState());
     state = JSON.parse(history.pop());
     selectedSource = null;
     stuckNotified = false;
+    if (wasWon) {
+      stopCascadeAnimation();
+      victoryBanner.classList.remove('active');
+      if (!state.won && state.moves > 0) startClock();
+    }
     noAnimateNext = false;
     render();
     persist();
@@ -321,18 +471,45 @@
     setStatus('Coup rétabli.');
   }
 
-  /* ---------- Coups ---------- */
+  /* ---------- Exécution des coups (Classique & Spider) ---------- */
+  function getMovingForActive(source) {
+    return activeGame === 'spider' ? S.getMovingCards(state, source) : R.getMovingCards(state, source);
+  }
+
   function doMove(source, target) {
     const snapshot = cloneState();
+    flipIds.clear();
+
+    if (activeGame === 'spider') {
+      const res = S.applyMove(state, source, target);
+      if (!res) { sound.error(); return false; }
+      pushHistory(snapshot);
+      startClock();
+      selectedSource = null;
+      res.flippedIds.forEach(id => flipIds.add(id));
+
+      if (res.completedRuns.length > 0) {
+        sound.suite();
+        const suit = res.completedRuns[0].suit;
+        setStatus(`👑 Suite complète de ${SUIT_NAMES[suit]} assemblée (+100 pts) ! (${state.completed.length}/8)`);
+      } else {
+        sound.move();
+        const lead = res.cards[0];
+        setStatus(`${cardName(lead)}${res.cards.length > 1 ? ` (+${res.cards.length - 1})` : ''} déplacé vers la colonne ${target.col + 1}.`);
+      }
+      render();
+      afterMove();
+      return true;
+    }
+
     const res = R.applyMove(state, source, target);
     if (!res) { sound.error(); return false; }
     pushHistory(snapshot);
     startClock();
     selectedSource = null;
-    flipId = null;
     if (res.flipped && source.zone === 'tableau') {
       const col = state.tableau[source.col];
-      flipId = col[col.length - 1].id;
+      flipIds.add(col[col.length - 1].id);
     }
     (target.zone === 'foundation' ? sound.foundation : sound.move)();
     const lead = res.cards[0];
@@ -345,13 +522,14 @@
   }
 
   function doDraw() {
+    if (activeGame === 'spider') return doSpiderDealRow();
     const snapshot = cloneState();
     const info = R.drawFromStock(state);
     if (!info) { setStatus('La pioche et la défausse sont vides.'); return false; }
     pushHistory(snapshot);
     startClock();
     selectedSource = null;
-    flipId = null;
+    flipIds.clear();
     sound.draw();
     setStatus(info.type === 'draw'
       ? `Tirage de ${info.count} carte${info.count > 1 ? 's' : ''} depuis la pioche.`
@@ -361,12 +539,53 @@
     return true;
   }
 
+  function doSpiderDealRow() {
+    const check = S.canDealRow(state);
+    if (!check.ok) {
+      sound.error();
+      if (check.reason === 'empty-column') {
+        clearHints();
+        state.tableau.forEach((col, i) => {
+          if (col.length === 0) spiderCols[i].querySelector('.slot').classList.add('hint-glow');
+        });
+        setTimeout(clearHints, 2200);
+        setStatus('⚠️ Remplissez d’abord toutes les colonnes vides avant de distribuer une nouvelle rangée.');
+        showToast('Colonne vide : placez au moins une carte dans chaque colonne avant de distribuer.', null, null, 4500);
+      } else {
+        setStatus('Aucune série restante dans le talon.');
+      }
+      return false;
+    }
+
+    const snapshot = cloneState();
+    const res = S.dealRow(state);
+    if (!res.ok) return false;
+    pushHistory(snapshot);
+    startClock();
+    selectedSource = null;
+    flipIds.clear();
+    dealtIds.clear();
+    res.dealt.forEach(d => dealtIds.add(d.card.id));
+    res.flippedIds.forEach(id => flipIds.add(id));
+    if (res.completedRuns.length > 0) sound.suite(); else sound.draw();
+
+    const left = Math.ceil(state.stock.length / 10);
+    setStatus(res.completedRuns.length > 0
+      ? `Rangée distribuée et suite complète assemblée ! (${left} série${left > 1 ? 's' : ''} restante${left > 1 ? 's' : ''})`
+      : `Nouvelle rangée de 10 cartes distribuée (${left} série${left > 1 ? 's' : ''} restante${left > 1 ? 's' : ''}).`);
+    render();
+    afterMove();
+    return true;
+  }
+
   function afterMove() {
     persist();
-    if (R.isWon(state)) { handleWin(); return; }
-    if (!isAutoCompleting && state.moves > 0 && !stuckNotified && !R.hasAnyMove(state)) {
+    const wonNow = activeGame === 'spider' ? state.won : R.isWon(state);
+    if (wonNow) { handleWin(); return; }
+    const hasMove = activeGame === 'spider' ? S.hasAnyMove(state) : R.hasAnyMove(state);
+    if (!isAutoCompleting && state.moves > 0 && !stuckNotified && !hasMove) {
       stuckNotified = true;
-      setStatus('😕 Plus de coups évidents : annulez un coup ou démarrez une nouvelle partie.');
+      setStatus('😕 Plus de coups possibles : annulez un coup ou démarrez une nouvelle partie.');
       showToast('Plus de coups possibles.', 'Nouvelle partie', () => confirmNewGame(), 9000);
     }
   }
@@ -374,21 +593,32 @@
   function handleWin() {
     state.won = true;
     stopClock();
-    if (timerSeconds > 30) state.score += Math.floor(700000 / timerSeconds);
-    Store.recordWin({ score: state.score, time: timerSeconds, moves: state.moves });
-    Store.clearSave();
+    if (activeGame === 'klondike' && timerSeconds > 30) {
+      state.score += Math.floor(700000 / timerSeconds);
+    }
+    Store.recordWin({ score: state.score, time: timerSeconds, moves: state.moves }, activeGame);
+    Store.clearSave(activeGame);
+    snapshotCurrentSession();
     isAutoCompleting = false;
     sound.win();
     render();
-    setStatus('🎉 Victoire ! Toutes les cartes sont réunies sur les fondations !');
+    setStatus(activeGame === 'spider'
+      ? '🎉 Victoire Spider ! Les 8 suites complètes sont réunies !'
+      : '🎉 Victoire ! Toutes les cartes sont réunies sur les fondations !');
     victoryStats.innerHTML = `Score final : <strong>${state.score}</strong> pts<br/>
       Temps : <strong>${formatTime(timerSeconds)}</strong> &bull; Coups : <strong>${state.moves}</strong>`;
     victoryBanner.classList.add('active');
     startCascadeAnimation();
   }
 
-  /* Envoi automatique d'une carte (double-clic / double-tap / clic droit / Entrée). */
   function tryAutoMoveFrom(source) {
+    if (activeGame === 'spider') {
+      const target = S.findBestAutoTarget(state, source);
+      if (target) return doMove(source, target);
+      sound.error();
+      return false;
+    }
+
     const moving = R.getMovingCards(state, source);
     if (!moving.length) return false;
     const lead = moving[0];
@@ -407,9 +637,9 @@
     return false;
   }
 
-  /* ---------- Fin automatique (suit la solution du solveur) ---------- */
+  /* ---------- Fin automatique (Classique) ---------- */
   function canAutoComplete() {
-    if (state.won) return false;
+    if (!state || state.won || activeGame === 'spider') return false;
     return state.tableau.every(col => col.every(c => c.faceUp));
   }
 
@@ -431,7 +661,7 @@
     }
 
     function next() {
-      if (!isAutoCompleting || state.won) return;
+      if (!isAutoCompleting || state.won || activeGame !== 'klondike') return;
       if (steps) {
         const step = steps.shift();
         if (!step) return stop();
@@ -441,7 +671,6 @@
         if (!state.won) setTimeout(next, 70);
         return;
       }
-      // Repli : coups vers les fondations, puis pioche, avec garde anti-boucle.
       let best = null;
       const consider = (card, source) => {
         const f = R.SUIT_INDEX[card.suit];
@@ -469,13 +698,13 @@
     next();
   }
 
-  /* ---------- Indice (basé sur le solveur) ---------- */
+  /* ---------- Indice ---------- */
   function clearHints() {
     document.querySelectorAll('.hint-glow').forEach(el => el.classList.remove('hint-glow'));
   }
 
   function glowCard(card) {
-    const el = document.querySelector(`.card[data-card-id="${card.id}"]`);
+    const el = activeBoard().querySelector(`.card[data-card-id="${card.id}"]`);
     if (el) el.classList.add('hint-glow');
   }
 
@@ -486,7 +715,27 @@
 
   function showHint() {
     clearHints();
-    if (state.won) return;
+    if (!state || state.won) return;
+
+    if (activeGame === 'spider') {
+      const hint = S.findHint(state);
+      if (!hint) {
+        setStatus('Aucun coup utile trouvé : essayez d’annuler un coup ou de distribuer.');
+        return;
+      }
+      if (hint.deal) {
+        spiderStockSlot.classList.add('hint-glow');
+        setStatus('💡 Indice : distribuez une nouvelle rangée de 10 cartes depuis le talon.');
+      } else {
+        const lead = S.getMovingCards(state, hint.source)[0];
+        glowCard(lead);
+        glowTarget(spiderCols[hint.target.col]);
+        setStatus(`💡 Indice : déplacez ${cardName(lead)} vers la colonne ${hint.target.col + 1}.`);
+      }
+      setTimeout(clearHints, 2600);
+      return;
+    }
+
     setStatus('💡 Recherche du meilleur coup…');
     const hint = R.findHint(state, 15000);
     if (!hint) {
@@ -511,12 +760,15 @@
 
   /* ---------- Rendu ---------- */
   function updateHUD() {
+    if (!state) return;
     scoreEl.textContent = state.score;
     timeEl.textContent = formatTime(timerSeconds);
     movesEl.textContent = state.moves;
-    btnUndo.disabled = !history.length || state.won;
+    btnUndo.disabled = !history.length;
     btnRedo.disabled = !redoStack.length || state.won;
-    dealBadge.textContent = `Donne #${dealSeed}${dealVerified ? ' ✓' : ''}`;
+    dealBadge.textContent = activeGame === 'spider'
+      ? `Spider #${dealSeed} (${spiderSuits}c)`
+      : `Donne #${dealSeed}${dealVerified ? ' ✓' : ''}`;
   }
 
   function isSourceSelected(src) {
@@ -525,18 +777,49 @@
   }
 
   function render() {
-    // 1. Positions précédentes pour l'animation de déplacement
+    if (!state) return;
+    const board = activeBoard();
+    const refStock = activeRefSlot();
     const animate = !noAnimateNext && !reducedMotion();
     const previous = new Map();
     let stockRect = null;
     if (animate) {
-      document.querySelectorAll('.card[data-card-id]').forEach(el => previous.set(el.dataset.cardId, el.getBoundingClientRect()));
-      stockRect = stockSlot.getBoundingClientRect();
+      board.querySelectorAll('.card[data-card-id]').forEach(el => previous.set(el.dataset.cardId, el.getBoundingClientRect()));
+      stockRect = refStock.getBoundingClientRect();
     }
 
     updateHUD();
 
-    // 2. Pioche
+    if (activeGame === 'spider') {
+      renderSpider();
+    } else {
+      renderKlondike();
+    }
+
+    btnAutoComplete.style.display = canAutoComplete() ? 'inline-flex' : 'none';
+
+    if (animate && (previous.size || stockRect)) {
+      board.querySelectorAll('.card[data-card-id]').forEach(el => {
+        let from = previous.get(el.dataset.cardId);
+        if (!from && activeGame === 'klondike' && el.parentElement === wasteSlot) from = stockRect;
+        if (!from && activeGame === 'spider' && dealtIds.has(el.dataset.cardId)) from = stockRect;
+        if (!from) return;
+        const to = el.getBoundingClientRect();
+        const dx = from.left - to.left;
+        const dy = from.top - to.top;
+        if (Math.abs(dx) + Math.abs(dy) < 2) return;
+        el.animate(
+          [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
+          { duration: 190, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)' }
+        );
+      });
+    }
+    noAnimateNext = false;
+    flipIds.clear();
+    dealtIds.clear();
+  }
+
+  function renderKlondike() {
     stockSlot.querySelectorAll('.card').forEach(el => el.remove());
     if (state.stock.length) {
       const depth = Math.min(3, Math.ceil(state.stock.length / 8));
@@ -548,7 +831,6 @@
       }
     }
 
-    // 3. Défausse
     wasteSlot.innerHTML = '';
     if (state.waste.length) {
       const visible = state.drawCount === 3 ? Math.min(3, state.waste.length) : 1;
@@ -572,7 +854,6 @@
       }
     }
 
-    // 4. Fondations
     foundationSlots.forEach((slot, f) => {
       slot.querySelectorAll('.card').forEach(el => el.remove());
       const pile = state.foundations[f];
@@ -585,7 +866,6 @@
       }
     });
 
-    // 5. Tableau
     const downOffset = cssPx('--stack-offset-down', 13);
     const upOffset = cssPx('--stack-offset-up', 26);
     tableauCols.forEach((colEl, colIdx) => {
@@ -608,27 +888,89 @@
       });
       colEl.style.height = `${Math.max(150, top + 130)}px`;
     });
+  }
 
-    btnAutoComplete.style.display = canAutoComplete() ? 'inline-flex' : 'none';
-
-    // 6. Animation de déplacement (technique FLIP)
-    if (animate && previous.size) {
-      document.querySelectorAll('.card[data-card-id]').forEach(el => {
-        let from = previous.get(el.dataset.cardId);
-        if (!from && el.parentElement === wasteSlot) from = stockRect;
-        if (!from) return;
-        const to = el.getBoundingClientRect();
-        const dx = from.left - to.left;
-        const dy = from.top - to.top;
-        if (Math.abs(dx) + Math.abs(dy) < 2) return;
-        el.animate(
-          [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
-          { duration: 190, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)' }
-        );
-      });
+  function renderSpider() {
+    // 1. Talon : affiche jusqu'à 5 séries décalées
+    spiderStockSlot.querySelectorAll('.card').forEach(el => el.remove());
+    const dealsLeft = Math.ceil(state.stock.length / 10);
+    spiderDealsBadge.textContent = String(dealsLeft);
+    spiderDealsBadge.hidden = dealsLeft === 0;
+    const cardW = spiderStockSlot.offsetWidth || 60;
+    const deckShift = Math.max(4, Math.min(12, Math.round(cardW * 0.18)));
+    for (let i = 0; i < dealsLeft; i++) {
+      const el = createCardElement({ color: 'black', faceUp: false });
+      el.style.left = `${i * deckShift}px`;
+      el.style.top = `${-i}px`;
+      el.style.zIndex = i + 1;
+      spiderStockSlot.appendChild(el);
     }
-    noAnimateNext = false;
-    flipId = null;
+
+    // 2. 8 emplacements de suites complètes (Roi affiché par suite terminée)
+    spiderFoundationSlots.forEach((slot, idx) => {
+      slot.querySelectorAll('.card').forEach(el => el.remove());
+      const done = state.completed[idx];
+      if (done) {
+        const kingCard = {
+          id: `done_${idx}_${done.suit}`,
+          suit: done.suit,
+          color: done.color,
+          rank: 13,
+          label: 'K',
+          faceUp: true
+        };
+        const el = createCardElement(kingCard);
+        el.classList.remove('playable');
+        el.style.cursor = 'default';
+        slot.appendChild(el);
+      }
+    });
+
+    // 3. 10 colonnes Spider avec compression intelligente si une colonne s'allonge
+    const baseDown = cssPx('--stack-offset-down', 9);
+    const baseUp = cssPx('--stack-offset-up', 22);
+    const maxColHeight = Math.max(260, (window.innerHeight || 760) * 0.56);
+
+    spiderCols.forEach((colEl, colIdx) => {
+      colEl.querySelectorAll('.card').forEach(el => el.remove());
+      const cards = state.tableau[colIdx];
+      const movableStart = S.firstMovableIndex(cards);
+
+      const downCount = cards.filter(c => !c.faceUp).length;
+      const upCount = Math.max(0, cards.length - downCount - 1);
+      const rawSpan = downCount * baseDown + upCount * baseUp;
+      const scale = rawSpan > maxColHeight ? maxColHeight / rawSpan : 1;
+      const downStep = Math.max(4, Math.round(baseDown * scale));
+      const upStep = Math.max(13, Math.round(baseUp * scale));
+
+      let top = 0;
+      cards.forEach((card, idx) => {
+        const isMovable = card.faceUp && idx >= movableStart;
+        const extra = card.faceUp && !isMovable ? 'spider-blocked' : '';
+        const el = createCardElement(card, extra);
+        el.style.top = `${top}px`;
+        el.style.zIndex = idx + 1;
+
+        if (card.faceUp) {
+          if (isMovable) {
+            const src = { zone: 'tableau', col: colIdx, index: idx };
+            if (isSourceSelected(src)) el.classList.add('selected');
+            attachCardInteractions(el, src, idx === cards.length - 1);
+          } else {
+            el.classList.remove('playable');
+            // Cliquer sur une colonne via une carte bloquée permet quand même d'y déposer une sélection
+            el.addEventListener('click', () => {
+              if (selectedSource) doMove(selectedSource, { zone: 'tableau', col: colIdx });
+            });
+          }
+          top += upStep;
+        } else {
+          top += downStep;
+        }
+        colEl.appendChild(el);
+      });
+      colEl.style.height = `${Math.max(120, top + 110)}px`;
+    });
   }
 
   /* ---------- Entrées : pointeur, tap, clavier ---------- */
@@ -654,13 +996,14 @@
       e.stopPropagation();
       clearHints();
 
-      const moving = R.getMovingCards(state, source);
+      const moving = getMovingForActive(source);
       if (!moving.length) return;
 
       const rect = cardEl.getBoundingClientRect();
       let domElements = [cardEl];
       if (source.zone === 'tableau') {
-        domElements = Array.from(tableauCols[source.col].querySelectorAll('.card')).slice(source.index);
+        const cols = activeGame === 'spider' ? spiderCols : tableauCols;
+        domElements = Array.from(cols[source.col].querySelectorAll('.card')).slice(source.index);
       }
 
       dragSession = {
@@ -688,7 +1031,7 @@
       dragSession.isDragging = true;
       selectedSource = null;
       dragLayer.innerHTML = '';
-      const upOffset = cssPx('--stack-offset-up', 26);
+      const upOffset = cssPx('--stack-offset-up', 22);
       dragSession.movingCards.forEach((c, idx) => {
         const clone = createCardElement(c);
         clone.removeAttribute('data-card-id');
@@ -709,8 +1052,12 @@
     document.querySelectorAll('.slot.drop-valid').forEach(el => el.classList.remove('drop-valid'));
     const target = findBestDropTarget(x, y, dragSession.source, dragSession.movingCards);
     if (!target) return;
-    if (target.zone === 'foundation') foundationSlots[target.col].classList.add('drop-valid');
-    else tableauCols[target.col].querySelector('.slot').classList.add('drop-valid');
+    if (target.zone === 'foundation') {
+      foundationSlots[target.col].classList.add('drop-valid');
+    } else {
+      const cols = activeGame === 'spider' ? spiderCols : tableauCols;
+      cols[target.col].querySelector('.slot').classList.add('drop-valid');
+    }
   }
 
   function overlapArea(a, b) {
@@ -721,14 +1068,28 @@
 
   function findBestDropTarget(clientX, clientY, source, movingCards) {
     const lead = movingCards[0];
-    const cardW = stockSlot.offsetWidth || 85;
-    const cardH = stockSlot.offsetHeight || 120;
+    const ref = activeRefSlot();
+    const cardW = ref.offsetWidth || 70;
+    const cardH = ref.offsetHeight || 100;
     const left = clientX - (dragSession ? dragSession.offsetX : cardW / 2);
     const top = clientY - (dragSession ? dragSession.offsetY : cardH / 2);
     const dragRect = { left, right: left + cardW, top, bottom: top + cardH };
 
     let best = null;
     let bestArea = 0;
+
+    if (activeGame === 'spider') {
+      spiderCols.forEach((colEl, c) => {
+        if (source.col === c) return;
+        if (!S.canMoveToColumn(state, lead, c)) return;
+        if (source.index === 0 && state.tableau[c].length === 0) return;
+        const last = colEl.querySelector('.card:last-child') || colEl.querySelector('.slot');
+        const r = last.getBoundingClientRect();
+        const area = overlapArea(dragRect, { left: r.left - 6, right: r.right + 6, top: r.top - 10, bottom: r.bottom + 45 });
+        if (area > bestArea) { bestArea = area; best = { zone: 'tableau', col: c }; }
+      });
+      return best;
+    }
 
     if (movingCards.length === 1 && source.zone !== 'foundation') {
       foundationSlots.forEach((slot, f) => {
@@ -766,15 +1127,14 @@
 
     if (session.isDragging) {
       const target = findBestDropTarget(e.clientX, e.clientY, session.source, session.movingCards);
-      noAnimateNext = true; // la carte arrive depuis la position du doigt/curseur
+      noAnimateNext = true;
       if (target && doMove(session.source, target)) return;
       noAnimateNext = false;
       session.domElements.forEach(el => { el.style.opacity = '1'; });
       return;
     }
 
-    // Double-clic / double-tap : envoi automatique (fiable malgré le re-rendu du DOM)
-    const key = `${session.source.zone}:${session.source.col}:${session.source.index}`;
+    const key = `${activeGame}:${session.source.zone}:${session.source.col}:${session.source.index}`;
     const now = Date.now();
     if (lastTap.key === key && now - lastTap.time < 350) {
       lastTap = { key: null, time: 0 };
@@ -800,11 +1160,15 @@
   }
 
   foundationSlots.forEach((slot, f) => {
-    slot.addEventListener('click', () => { if (selectedSource) doMove(selectedSource, { zone: 'foundation', col: f }); });
+    slot.addEventListener('click', () => { if (activeGame === 'klondike' && selectedSource) doMove(selectedSource, { zone: 'foundation', col: f }); });
   });
   tableauCols.forEach((colEl, c) => {
-    colEl.addEventListener('click', () => { if (selectedSource) doMove(selectedSource, { zone: 'tableau', col: c }); });
+    colEl.addEventListener('click', () => { if (activeGame === 'klondike' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c }); });
   });
+  spiderCols.forEach((colEl, c) => {
+    colEl.addEventListener('click', () => { if (activeGame === 'spider' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c }); });
+  });
+
   document.body.addEventListener('click', (e) => {
     const cl = e.target.classList;
     if ((e.target === document.body || cl.contains('table-wrap') || cl.contains('tableau-zone')) && selectedSource) {
@@ -813,9 +1177,14 @@
     }
   });
 
-  stockSlot.addEventListener('click', () => { if (!state.won && !isAutoCompleting) doDraw(); });
+  stockSlot.addEventListener('click', () => { if (activeGame === 'klondike' && !state.won && !isAutoCompleting) doDraw(); });
   stockSlot.addEventListener('keydown', (e) => {
-    if ((e.key === 'Enter' || e.key === ' ') && !state.won && !isAutoCompleting) { e.preventDefault(); doDraw(); }
+    if (activeGame === 'klondike' && (e.key === 'Enter' || e.key === ' ') && !state.won && !isAutoCompleting) { e.preventDefault(); doDraw(); }
+  });
+
+  spiderStockSlot.addEventListener('click', () => { if (activeGame === 'spider' && !state.won) doSpiderDealRow(); });
+  spiderStockSlot.addEventListener('keydown', (e) => {
+    if (activeGame === 'spider' && (e.key === 'Enter' || e.key === ' ') && !state.won) { e.preventDefault(); doSpiderDealRow(); }
   });
 
   /* ---------- Cascade de victoire ---------- */
@@ -829,22 +1198,42 @@
     if (reducedMotion()) return;
     const ctx = victoryCanvas.getContext('2d');
     sizeVictoryCanvas();
-    const cardW = stockSlot.offsetWidth || 90;
-    const cardH = stockSlot.offsetHeight || 126;
+    const ref = activeRefSlot();
+    const cardW = ref.offsetWidth || 80;
+    const cardH = ref.offsetHeight || 114;
     const queue = [];
-    for (let r = 13; r >= 1; r--) {
-      for (let f = 0; f < 4; f++) {
-        const rect = foundationSlots[f].getBoundingClientRect();
-        queue.push({
-          x: rect.left, y: rect.top,
-          vx: (Math.random() * 6 + 2.5) * (Math.random() < 0.5 ? -1 : 1),
-          vy: -(Math.random() * 4 + 1),
-          suit: SUITS[f].symbol,
-          color: SUITS[f].color === 'red' ? '#d31920' : '#14171a',
-          label: R.LABELS[r - 1]
-        });
+
+    if (activeGame === 'spider') {
+      for (let r = 13; r >= 1; r--) {
+        for (let f = 0; f < 8; f++) {
+          const rect = spiderFoundationSlots[f].getBoundingClientRect();
+          const done = state.completed[f] || { suit: '♠', color: 'black' };
+          queue.push({
+            x: rect.left, y: rect.top,
+            vx: (Math.random() * 6 + 2.5) * (Math.random() < 0.5 ? -1 : 1),
+            vy: -(Math.random() * 4 + 1),
+            suit: done.suit,
+            color: done.color === 'red' ? '#d31920' : '#14171a',
+            label: R.LABELS[r - 1]
+          });
+        }
+      }
+    } else {
+      for (let r = 13; r >= 1; r--) {
+        for (let f = 0; f < 4; f++) {
+          const rect = foundationSlots[f].getBoundingClientRect();
+          queue.push({
+            x: rect.left, y: rect.top,
+            vx: (Math.random() * 6 + 2.5) * (Math.random() < 0.5 ? -1 : 1),
+            vy: -(Math.random() * 4 + 1),
+            suit: SUITS[f].symbol,
+            color: SUITS[f].color === 'red' ? '#d31920' : '#14171a',
+            label: R.LABELS[r - 1]
+          });
+        }
       }
     }
+
     let active = queue.shift();
 
     function drawMini(c) {
@@ -858,7 +1247,7 @@
       ctx.stroke();
       ctx.fillStyle = c.color;
       ctx.font = `bold ${Math.round(cardW * 0.2)}px Arial`;
-      ctx.fillText(`${c.label}${c.suit}`, c.x + 6, c.y + Math.round(cardW * 0.24));
+      ctx.fillText(`${c.label}${c.suit}`, c.x + 5, c.y + Math.round(cardW * 0.24));
       ctx.font = `${Math.round(cardW * 0.42)}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -898,11 +1287,14 @@
     optFourColor.checked = !!settings.fourColor;
     optSound.checked = !!settings.sound;
     optWinnable.checked = !!settings.winnable;
-    drawModeSelect.value = String(settings.drawMode);
+    drawModeSelect.value = String(settings.drawMode || 1);
+    spiderSuitsSelect.value = String(settings.spiderSuits || 1);
   }
 
   function renderStats() {
-    const s = Store.getStats();
+    const s = Store.getStats(activeGame);
+    const label = activeGame === 'spider' ? 'Statistiques — Spider' : 'Statistiques — Classique';
+    if (statsHeading) statsHeading.textContent = label;
     const rate = s.played ? Math.round((s.won / s.played) * 100) : 0;
     const items = [
       ['Parties jouées', s.played],
@@ -918,7 +1310,9 @@
   }
 
   function renderDealInfo() {
-    dealInfo.textContent = `Donne n° ${dealSeed} — tirage ${dealDraw} — ${dealVerified ? 'gagnable (vérifiée par le solveur)' : 'non vérifiée'}`;
+    dealInfo.textContent = activeGame === 'spider'
+      ? `Spider — Donne n° ${dealSeed} — ${spiderSuits} couleur${spiderSuits > 1 ? 's' : ''}`
+      : `Classique — Donne n° ${dealSeed} — tirage ${dealDraw} — ${dealVerified ? 'gagnable (vérifiée)' : 'aléatoire'}`;
   }
 
   function saveSettings() { Store.saveSettings(settings); }
@@ -938,12 +1332,20 @@
   optWinnable.addEventListener('change', () => { settings.winnable = optWinnable.checked; saveSettings(); });
 
   $('btn-reset-stats').addEventListener('click', () => {
-    if (window.confirm('Réinitialiser toutes les statistiques ?')) { Store.resetStats(); renderStats(); }
+    const modeName = activeGame === 'spider' ? 'Spider' : 'Classique';
+    if (window.confirm(`Réinitialiser toutes les statistiques du mode ${modeName} ?`)) {
+      Store.resetStats(activeGame);
+      renderStats();
+    }
   });
 
   $('btn-replay').addEventListener('click', () => {
     dlgMenu.close();
-    confirmNewGame({ seed: dealSeed, order: initialOrder, verified: dealVerified, verifiedDraw: dealDraw });
+    if (activeGame === 'spider') {
+      confirmNewGame({ seed: dealSeed, spiderSuits });
+    } else {
+      confirmNewGame({ seed: dealSeed, order: initialOrder, verified: dealVerified, verifiedDraw: dealDraw });
+    }
   });
 
   $('btn-play-seed').addEventListener('click', () => {
@@ -954,7 +1356,10 @@
   });
 
   $('btn-share').addEventListener('click', async () => {
-    const url = `${location.origin}${location.pathname}?seed=${dealSeed}&draw=${dealDraw}`;
+    const query = activeGame === 'spider'
+      ? `?game=spider&suits=${spiderSuits}&seed=${dealSeed}`
+      : `?game=klondike&draw=${dealDraw}&seed=${dealSeed}`;
+    const url = `${location.origin}${location.pathname}${query}`;
     try {
       await navigator.clipboard.writeText(url);
       showToast('Lien de la donne copié dans le presse-papiers.', null, null, 3500);
@@ -975,7 +1380,7 @@
   function updateInstallUi() {
     installBtn.hidden = !deferredInstall;
     if (isStandalone()) installInfo.textContent = 'Application installée ✓';
-    else if (deferredInstall) installInfo.textContent = 'Installez le jeu pour y jouer hors ligne, en plein écran.';
+    else if (deferredInstall) installInfo.textContent = 'Installez Solis 52 (Classique & Spider) pour jouer hors ligne.';
     else if (isIOS()) installInfo.textContent = 'Sur iPhone/iPad : touchez Partager puis « Sur l’écran d’accueil ».';
     else installInfo.textContent = 'Installation disponible via le menu du navigateur (⋮ ▸ Installer l’application).';
   }
@@ -1028,10 +1433,13 @@
         });
       });
       document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
-    }).catch(() => { /* enregistrement impossible (contexte non sécurisé) */ });
+    }).catch(() => {});
   }
 
-  /* ---------- Contrôles et raccourcis ---------- */
+  /* ---------- Contrôles, onglets et raccourcis ---------- */
+  tabKlondike.addEventListener('click', () => switchGameTab('klondike'));
+  tabSpider.addEventListener('click', () => switchGameTab('spider'));
+
   btnUndo.addEventListener('click', undo);
   btnRedo.addEventListener('click', redo);
   btnHint.addEventListener('click', showHint);
@@ -1046,6 +1454,15 @@
       return;
     }
     lastDrawMode = drawModeSelect.value;
+  });
+
+  let lastSpiderSuits = spiderSuitsSelect.value;
+  spiderSuitsSelect.addEventListener('change', () => {
+    if (!confirmNewGame({ spiderSuits: parseInt(spiderSuitsSelect.value, 10) })) {
+      spiderSuitsSelect.value = lastSpiderSuits;
+      return;
+    }
+    lastSpiderSuits = spiderSuitsSelect.value;
   });
 
   window.addEventListener('keydown', (e) => {
@@ -1086,32 +1503,45 @@
   function start() {
     syncViewportWidth();
     applySettings();
-    lastDrawMode = drawModeSelect.value;
     registerServiceWorker();
     updateInstallUi();
 
     const params = new URLSearchParams(location.search);
+    const urlGame = params.get('game');
     const urlSeed = parseInt(params.get('seed'), 10);
     const urlDraw = parseInt(params.get('draw'), 10);
+    const urlSuits = parseInt(params.get('suits'), 10);
     const wantsNew = params.get('new') === '1';
-    if (params.has('seed') || params.has('new') || params.has('draw') || params.has('source')) {
-      try { history_replace(); } catch (e) { /* ignore */ }
+
+    if (urlGame === 'spider' || urlGame === 'klondike') {
+      activeGame = urlGame;
+      settings.activeGame = urlGame;
+      Store.saveSettings(settings);
+    }
+
+    syncModeDOM();
+    lastDrawMode = drawModeSelect.value;
+    lastSpiderSuits = spiderSuitsSelect.value;
+
+    if (params.has('game') || params.has('seed') || params.has('new') || params.has('draw') || params.has('suits') || params.has('source')) {
+      try { window.history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
     }
 
     if (urlSeed > 0) {
-      newGame({ seed: urlSeed, drawCount: urlDraw === 3 ? 3 : (urlDraw === 1 ? 1 : undefined) });
+      if (activeGame === 'spider') {
+        newGame({ seed: urlSeed, spiderSuits: (urlSuits === 1 || urlSuits === 2 || urlSuits === 4) ? urlSuits : undefined });
+      } else {
+        newGame({ seed: urlSeed, drawCount: urlDraw === 3 ? 3 : (urlDraw === 1 ? 1 : undefined) });
+      }
       return;
     }
-    const save = !wantsNew && Store.getSave();
-    if (save && save.state && !save.state.won && save.order) {
-      restoreGame(save);
+
+    const save = !wantsNew && Store.getSave(activeGame);
+    if (save && save.state && !save.state.won) {
+      restoreGame(save, activeGame);
     } else {
       newGame();
     }
-  }
-
-  function history_replace() {
-    window.history.replaceState(null, '', location.pathname);
   }
 
   start();

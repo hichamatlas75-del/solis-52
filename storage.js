@@ -1,5 +1,5 @@
 /*
- * Solis 52 — persistance locale (statistiques, réglages, sauvegarde de partie).
+ * Solis 52 — persistance locale (statistiques, réglages, sauvegardes par mode de jeu : Classique & Spider).
  * Tolérant aux navigateurs où localStorage est indisponible (navigation privée, etc.).
  */
 (function (root, factory) {
@@ -12,9 +12,11 @@
 })(typeof self !== 'undefined' ? self : this, function (store) {
   'use strict';
 
-  const KEY_STATS = 'solis52.stats.v1';
+  const KEY_STATS_KLONDIKE = 'solis52.stats.v1';
+  const KEY_STATS_SPIDER = 'solis52.spider.stats.v1';
   const KEY_SETTINGS = 'solis52.settings.v1';
-  const KEY_SAVE = 'solis52.save.v1';
+  const KEY_SAVE_KLONDIKE = 'solis52.save.v1';
+  const KEY_SAVE_SPIDER = 'solis52.spider.save.v1';
 
   const DEFAULT_STATS = {
     played: 0, won: 0, bestScore: 0, bestTime: null, bestMoves: null,
@@ -22,9 +24,23 @@
   };
 
   const DEFAULT_SETTINGS = {
-    drawMode: 1, felt: 'classic', cardback: 'blue',
-    fourColor: false, sound: false, winnable: true
+    activeGame: 'klondike',
+    drawMode: 1,
+    spiderSuits: 1,
+    felt: 'classic',
+    cardback: 'blue',
+    fourColor: false,
+    sound: false,
+    winnable: true
   };
+
+  function statsKey(mode) {
+    return mode === 'spider' ? KEY_STATS_SPIDER : KEY_STATS_KLONDIKE;
+  }
+
+  function saveKey(mode) {
+    return mode === 'spider' ? KEY_SAVE_SPIDER : KEY_SAVE_KLONDIKE;
+  }
 
   function read(key, fallback) {
     try {
@@ -45,22 +61,23 @@
   }
 
   return {
-    getStats() { return Object.assign({}, DEFAULT_STATS, read(KEY_STATS, {})); },
-    recordPlayed() {
-      const s = this.getStats();
+    getStats(mode = 'klondike') {
+      return Object.assign({}, DEFAULT_STATS, read(statsKey(mode), {}));
+    },
+    recordPlayed(mode = 'klondike') {
+      const s = this.getStats(mode);
       s.played++;
-      write(KEY_STATS, s);
+      write(statsKey(mode), s);
       return s;
     },
-    /* Une partie commencée mais abandonnée interrompt la série de victoires. */
-    recordAbandoned() {
-      const s = this.getStats();
+    recordAbandoned(mode = 'klondike') {
+      const s = this.getStats(mode);
       s.streak = 0;
-      write(KEY_STATS, s);
+      write(statsKey(mode), s);
       return s;
     },
-    recordWin({ score, time, moves }) {
-      const s = this.getStats();
+    recordWin({ score, time, moves }, mode = 'klondike') {
+      const s = this.getStats(mode);
       s.won++;
       s.streak++;
       s.bestStreak = Math.max(s.bestStreak, s.streak);
@@ -68,17 +85,21 @@
       s.bestTime = s.bestTime === null ? time : Math.min(s.bestTime, time);
       s.bestMoves = s.bestMoves === null ? moves : Math.min(s.bestMoves, moves);
       s.totalTime += time;
-      write(KEY_STATS, s);
+      write(statsKey(mode), s);
       return s;
     },
-    resetStats() { write(KEY_STATS, DEFAULT_STATS); },
+    resetStats(mode = 'klondike') {
+      write(statsKey(mode), DEFAULT_STATS);
+    },
 
     getSettings() { return Object.assign({}, DEFAULT_SETTINGS, read(KEY_SETTINGS, {})); },
     saveSettings(settings) { return write(KEY_SETTINGS, settings); },
 
-    getSave() { return read(KEY_SAVE, null); },
-    saveGame(data) { return write(KEY_SAVE, data); },
-    clearSave() { try { store && store.removeItem(KEY_SAVE); } catch (e) { /* ignore */ } },
+    getSave(mode = 'klondike') { return read(saveKey(mode), null); },
+    saveGame(data, mode = 'klondike') { return write(saveKey(mode), data); },
+    clearSave(mode = 'klondike') {
+      try { store && store.removeItem(saveKey(mode)); } catch (e) { /* ignore */ }
+    },
 
     DEFAULT_STATS, DEFAULT_SETTINGS
   };

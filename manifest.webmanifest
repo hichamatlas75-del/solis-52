@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Solis 52",
   "short_name": "Solis 52",
-  "description": "Jeu de patience à 7 colonnes sur tapis de feutre. Jouable hors ligne.",
+  "description": "Solis 52 — jeux de cartes Classique (7 colonnes) et Spider (10 colonnes) sur tapis de feutre, jouables hors ligne.",
   "lang": "fr",
   "dir": "ltr",
   "start_url": "./index.html?source=pwa",
@@ -20,9 +20,15 @@
   ],
   "shortcuts": [
     {
-      "name": "Nouvelle partie",
-      "short_name": "Nouvelle",
-      "url": "./index.html?new=1&source=shortcut",
+      "name": "Partie Classique",
+      "short_name": "Classique",
+      "url": "./index.html?game=klondike&new=1&source=shortcut",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Partie Spider",
+      "short_name": "Spider",
+      "url": "./index.html?game=spider&source=shortcut",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]

@@ -1,10 +1,11 @@
 /* Solis 52 — service worker : fonctionnement hors ligne (stale-while-revalidate). */
-const VERSION = 'solis52-v2.1.0';
+const VERSION = 'solis52-v3.0.0';
 const APP_SHELL = [
   './',
   './index.html',
   './style.css',
   './rules.js',
+  './spider-rules.js',
   './storage.js',
   './script.js',
   './manifest.webmanifest',

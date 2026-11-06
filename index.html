@@ -3,27 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Solis 52 : jeu de cartes de patience classique à 7 colonnes sur tapis de feutre. Installable et jouable hors ligne." />
+  <meta name="description" content="Solis 52 : Patience Classique (7 colonnes) et Spider (10 colonnes) sur tapis de feutre. Installable et jouable hors ligne." />
   <meta name="theme-color" content="#0b5d2f" />
   <meta name="color-scheme" content="dark" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Solis 52" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Solis 52</title>
+  <title>Solis 52 — Classique &amp; Spider</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body data-felt="classic" data-cardback="blue">
+<body data-game="klondike" data-felt="classic" data-cardback="blue">
 
-  <!-- Barre supérieure -->
+  <!-- Barre supérieure avec onglets Classique / Spider -->
   <header class="topbar">
-    <h1 class="brand">
-      <span class="brand-icon" aria-hidden="true">☀</span>
-      <span>Solis 52</span>
-    </h1>
+    <div class="brand-group">
+      <h1 class="brand">
+        <span class="brand-icon" aria-hidden="true">☀</span>
+        <span>Solis 52</span>
+      </h1>
+
+      <nav class="game-tabs" role="tablist" aria-label="Choix du jeu de cartes">
+        <button type="button" role="tab" id="tab-klondike" class="game-tab active" aria-selected="true" aria-controls="board-klondike">
+          🃏 Classique
+        </button>
+        <button type="button" role="tab" id="tab-spider" class="game-tab" aria-selected="false" aria-controls="board-spider">
+          🕷️ Spider
+        </button>
+      </nav>
+    </div>
 
     <div class="stats-bar" aria-label="Score, temps et coups">
       <div class="stat-item">
@@ -41,9 +52,17 @@
     </div>
 
     <div class="controls">
+      <!-- Sélecteur Classique (1 ou 3 cartes) -->
       <select id="draw-mode" class="select-ctrl" title="Mode de tirage" aria-label="Mode de tirage">
         <option value="1">Tirage 1 carte</option>
         <option value="3">Tirage 3 cartes</option>
+      </select>
+
+      <!-- Sélecteur Spider (1, 2 ou 4 couleurs) -->
+      <select id="spider-suits" class="select-ctrl" title="Difficulté Spider" aria-label="Nombre de couleurs Spider" hidden>
+        <option value="1">1 couleur (♠)</option>
+        <option value="2">2 couleurs (♠♥)</option>
+        <option value="4">4 couleurs (♠♥♣♦)</option>
       </select>
 
       <button id="btn-autocomplete" class="btn btn-gold" style="display: none;">⚡ Terminer auto</button>
@@ -55,9 +74,9 @@
     </div>
   </header>
 
-  <!-- Plateau -->
-  <main class="table-wrap">
-    <section class="top-zone" aria-label="Pioche, défausse et fondations">
+  <!-- Plateau Onglet 1 : Patience Classique (7 colonnes + 4 fondations) -->
+  <main id="board-klondike" class="table-wrap" role="tabpanel" aria-labelledby="tab-klondike">
+    <section class="top-zone" aria-label="Pioche, défausse et 4 fondations">
       <div id="stock-slot" class="slot stock-slot" role="button" tabindex="0" aria-label="Pioche" title="Cliquer pour piocher ou recycler">
         <div class="slot-watermark">
           <div class="stock-recycle-icon">↻</div>
@@ -82,7 +101,7 @@
       </div>
     </section>
 
-    <section class="tableau-zone" id="tableau-zone" aria-label="Colonnes du tableau">
+    <section class="tableau-zone" id="tableau-zone" aria-label="Colonnes du tableau Classique">
       <div class="tableau-col" id="tableau-col-0" data-col="0"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
       <div class="tableau-col" id="tableau-col-1" data-col="1"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
       <div class="tableau-col" id="tableau-col-2" data-col="2"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
@@ -90,6 +109,42 @@
       <div class="tableau-col" id="tableau-col-4" data-col="4"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
       <div class="tableau-col" id="tableau-col-5" data-col="5"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
       <div class="tableau-col" id="tableau-col-6" data-col="6"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
+    </section>
+  </main>
+
+  <!-- Plateau Onglet 2 : Spider Solitaire (10 colonnes + talon de 5 séries + 8 suites complètes) -->
+  <main id="board-spider" class="table-wrap spider-board" role="tabpanel" aria-labelledby="tab-spider" hidden>
+    <section class="top-zone spider-top-zone" aria-label="Talon Spider et 8 suites complètes">
+      <div id="spider-stock-slot" class="slot stock-slot spider-stock-slot" role="button" tabindex="0" aria-label="Distribuer 10 cartes" title="Distribuer 1 carte sur chacune des 10 colonnes">
+        <div class="slot-watermark">
+          <span class="spider-empty-icon">∅</span>
+        </div>
+        <span id="spider-deals-badge" class="deals-badge" title="Séries restantes">5</span>
+      </div>
+
+      <div class="spacer-slot"></div>
+
+      <div class="slot spider-foundation-slot" data-sfound="0" aria-label="Suite complète 1"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="1" aria-label="Suite complète 2"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="2" aria-label="Suite complète 3"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="3" aria-label="Suite complète 4"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="4" aria-label="Suite complète 5"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="5" aria-label="Suite complète 6"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="6" aria-label="Suite complète 7"><div class="slot-watermark king-watermark">♚</div></div>
+      <div class="slot spider-foundation-slot" data-sfound="7" aria-label="Suite complète 8"><div class="slot-watermark king-watermark">♚</div></div>
+    </section>
+
+    <section class="tableau-zone spider-tableau-zone" id="spider-tableau-zone" aria-label="10 colonnes Spider">
+      <div class="tableau-col spider-col" data-scol="0"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="1"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="2"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="3"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="4"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="5"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="6"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="7"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="8"><div class="slot"></div></div>
+      <div class="tableau-col spider-col" data-scol="9"><div class="slot"></div></div>
     </section>
   </main>
 
@@ -113,7 +168,7 @@
 
       <section class="dialog-section">
         <h3>Partie</h3>
-        <label class="field"><input type="checkbox" id="opt-winnable" /> <span>Donnes toujours gagnables (vérifiées par le solveur)</span></label>
+        <label class="field" id="row-winnable"><input type="checkbox" id="opt-winnable" /> <span>Donnes Classique toujours gagnables (vérifiées par le solveur)</span></label>
         <div class="field-row">
           <span class="field-info" id="deal-info">Donne —</span>
         </div>
@@ -148,9 +203,9 @@
       </section>
 
       <section class="dialog-section">
-        <h3>Statistiques</h3>
+        <h3 id="stats-heading">Statistiques</h3>
         <dl class="stats-grid" id="stats-grid"></dl>
-        <button type="button" class="btn" id="btn-reset-stats">Réinitialiser les statistiques</button>
+        <button type="button" class="btn" id="btn-reset-stats">Réinitialiser ces statistiques</button>
       </section>
 
       <section class="dialog-section">
@@ -172,10 +227,10 @@
 
   <!-- Barre d'état -->
   <footer class="statusbar">
-    <div id="status-msg" role="status" aria-live="polite">Prêt — glissez-déposez les cartes ou touchez deux fois pour envoyer vers les fondations.</div>
+    <div id="status-msg" role="status" aria-live="polite">Prêt — glissez-déposez les cartes ou touchez deux fois pour jouer.</div>
     <div class="status-shortcuts">
       <span id="deal-badge" class="deal-badge"></span>
-      <span><kbd class="kbd">Double-clic</kbd> Auto-envoi</span>
+      <span><kbd class="kbd">Double-clic</kbd> Auto-coup</span>
       <span><kbd class="kbd">Ctrl+Z</kbd>/<kbd class="kbd">Ctrl+Y</kbd></span>
       <span><kbd class="kbd">H</kbd> Indice</span>
       <span><kbd class="kbd">N</kbd> Nouvelle</span>
@@ -183,6 +238,7 @@
   </footer>
 
   <script src="rules.js"></script>
+  <script src="spider-rules.js"></script>
   <script src="storage.js"></script>
   <script src="script.js"></script>
 </body>
