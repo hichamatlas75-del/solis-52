@@ -38,6 +38,11 @@ body[data-cardback="crimson"] {
   -webkit-user-select: none;
 }
 
+.card, .stock-slot {
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
 html, body {
   margin: 0;
   padding: 0;

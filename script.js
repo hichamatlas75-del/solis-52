@@ -177,7 +177,7 @@
   function createCardElement(card) {
     const el = document.createElement('div');
     el.className = `card ${card.color} ${card.faceUp ? 'face-up playable' : 'face-down'}`;
-    el.dataset.cardId = card.id;
+    if (card.faceUp) el.dataset.cardId = card.id;
 
     if (!card.faceUp) {
       el.innerHTML = `<div class="card-back-pattern"></div>`;
@@ -222,11 +222,24 @@
   function canMoveToFoundation(card, foundIdx) {
     const pile = state.foundations[foundIdx];
     if (pile.length === 0) {
-      return card.rank === 1;
+      // Chaque fondation est dédiée à l'enseigne indiquée par son filigrane
+      return card.rank === 1 && SUITS[foundIdx].symbol === card.suit;
     }
     const top = pile[pile.length - 1];
     return top.suit === card.suit && card.rank === top.rank + 1;
   }
+
+  // Mesure réelle en pixels d'une variable CSS (gère clamp(), vw, etc.)
+  function cssPx(varName, fallback) {
+    const probe = document.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;width:0;height:var(${varName});`;
+    document.body.appendChild(probe);
+    const px = probe.offsetHeight;
+    probe.remove();
+    return px || fallback;
+  }
+
+  let lastTap = { key: null, time: 0 };
 
   function canMoveToTableau(leadingCard, colIdx) {
     const col = state.tableau[colIdx];
@@ -333,6 +346,10 @@
 
   function handleStockClick() {
     if (state.won || isAutoCompleting) return;
+    drawFromStock();
+  }
+
+  function drawFromStock() {
     selectedSource = null;
 
     if (state.stock.length > 0) {
@@ -439,6 +456,8 @@
     isAutoCompleting = true;
     btnAutoComplete.style.display = 'none';
     setStatus('⚡ Auto-complétion en cours...');
+    let idleDraws = 0;
+    let lastTotal = state.foundations.reduce((a, f) => a + f.length, 0);
 
     function step() {
       if (state.won || !isAutoCompleting) return;
@@ -479,7 +498,19 @@
       }
 
       if (state.stock.length > 0 || state.waste.length > 0) {
-        handleStockClick();
+        const total = state.foundations.reduce((a, f) => a + f.length, 0);
+        if (total !== lastTotal) {
+          lastTotal = total;
+          idleDraws = 0;
+        }
+        idleDraws++;
+        if (idleDraws > state.stock.length + state.waste.length + 2) {
+          isAutoCompleting = false;
+          render();
+          setStatus('Auto-complétion arrêtée : aucun coup possible automatiquement.');
+          return;
+        }
+        drawFromStock();
         setTimeout(step, 65);
         return;
       }
@@ -638,8 +669,8 @@
     });
 
     // 4. Tableau
-    const downOffset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack-offset-down')) || 13;
-    const upOffset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack-offset-up')) || 26;
+    const downOffset = cssPx('--stack-offset-down', 13);
+    const upOffset = cssPx('--stack-offset-up', 26);
 
     tableauCols.forEach((colEl, colIdx) => {
       colEl.querySelectorAll('.card').forEach(el => el.remove());
@@ -684,12 +715,6 @@
       tryAutoMoveFrom(source);
     });
 
-    cardEl.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      tryAutoMoveFrom(source);
-    });
-
     cardEl.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || state.won || isAutoCompleting) return;
       e.stopPropagation();
@@ -718,8 +743,12 @@
         isDragging: false
       };
 
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
       window.addEventListener('pointermove', onPointerMove);
       window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerCancel);
     });
   }
 
@@ -733,7 +762,7 @@
       selectedSource = null;
 
       dragLayer.innerHTML = '';
-      const upOffset = 26;
+      const upOffset = cssPx('--stack-offset-up', 26);
       dragSession.movingCards.forEach((c, idx) => {
         const cloneEl = createCardElement(c);
         cloneEl.style.top = `${idx * upOffset}px`;
@@ -826,6 +855,7 @@
   function onPointerUp(e) {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
     document.querySelectorAll('.slot.drop-valid').forEach(el => el.classList.remove('drop-valid'));
 
     if (!dragSession) return;
@@ -842,6 +872,17 @@
         el.style.opacity = '1';
       });
     } else {
+      // Double-clic / double-tap : envoi automatique (fiable malgré le re-rendu du DOM)
+      const key = `${session.source.zone}:${session.source.col}:${session.source.index}`;
+      const now = Date.now();
+      if (lastTap.key === key && now - lastTap.time < 350) {
+        lastTap = { key: null, time: 0 };
+        selectedSource = null;
+        if (!tryAutoMoveFrom(session.source)) render();
+        return;
+      }
+      lastTap = { key, time: now };
+
       if (selectedSource && !isSourceSelected(session.source)) {
         if (session.source.zone === 'foundation') {
           if (executeMove(selectedSource, { zone: 'foundation', col: session.source.col })) return;
@@ -856,6 +897,16 @@
       }
       render();
     }
+  }
+
+  function onPointerCancel() {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
+    document.querySelectorAll('.slot.drop-valid').forEach(el => el.classList.remove('drop-valid'));
+    dragLayer.innerHTML = '';
+    dragSession = null;
+    render();
   }
 
   foundationSlots.forEach((slot, fIdx) => {
@@ -975,19 +1026,39 @@
 
   btnUndo.addEventListener('click', () => {
     if (history.length === 0 || isAutoCompleting) return;
+    const wasWon = state.won;
     state = history.pop();
     selectedSource = null;
+    if (wasWon) {
+      stopCascadeAnimation();
+      victoryBanner.classList.remove('active');
+      if (!state.won && state.moves > 0) startTimerIfNeeded();
+    }
     render();
     setStatus('Dernier coup annulé.');
   });
 
+  function confirmNewGame() {
+    const inProgress = state.moves > 0 && !state.won;
+    if (inProgress && !window.confirm('Abandonner la partie en cours et en démarrer une nouvelle ?')) {
+      return false;
+    }
+    initGame();
+    return true;
+  }
+
   btnHint.addEventListener('click', showHint);
-  btnNew.addEventListener('click', initGame);
+  btnNew.addEventListener('click', confirmNewGame);
   btnVictoryNew.addEventListener('click', initGame);
   btnAutoComplete.addEventListener('click', runAutoComplete);
 
+  let lastDrawMode = drawModeSelect.value;
   drawModeSelect.addEventListener('change', () => {
-    initGame();
+    if (!confirmNewGame()) {
+      drawModeSelect.value = lastDrawMode;
+      return;
+    }
+    lastDrawMode = drawModeSelect.value;
   });
 
   feltThemeSelect.addEventListener('change', (e) => {
@@ -995,13 +1066,17 @@
   });
 
   window.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       btnUndo.click();
+    } else if (e.ctrlKey || e.metaKey || e.altKey) {
+      return;
     } else if (e.key.toLowerCase() === 'h') {
       showHint();
     } else if (e.key.toLowerCase() === 'n') {
-      initGame();
+      confirmNewGame();
     }
   });
 
