@@ -619,3 +619,109 @@ html, body {
     padding: 10px 6px 50px;
   }
 }
+
+/* ===== PWA, accessibilité et nouvelles fonctionnalités ===== */
+
+/* Encoches / barres système (mode installé) */
+.topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+.statusbar { padding-bottom: max(5px, env(safe-area-inset-bottom)); }
+
+/* Focus clavier visible */
+.card:focus-visible, .stock-slot:focus-visible, .btn:focus-visible,
+.select-ctrl:focus-visible, .input-ctrl:focus-visible {
+  outline: 3px solid var(--gold-accent);
+  outline-offset: 2px;
+}
+.card[tabindex] { cursor: grab; }
+
+/* Enseignes en 4 couleurs (daltonisme) */
+body[data-fourcolor="on"] .card[data-suit="♣"] { color: #0a7a2f; }
+body[data-fourcolor="on"] .card[data-suit="♦"] { color: #1558c0; }
+body[data-fourcolor="on"] .card[data-suit="♥"] { color: #d31920; }
+body[data-fourcolor="on"] .card[data-suit="♠"] { color: #14171a; }
+
+/* Retournement d'une carte */
+@keyframes cardFlip {
+  from { transform: scaleX(0.05); }
+  to   { transform: scaleX(1); }
+}
+.card.just-flipped { animation: cardFlip 0.22s ease-out; }
+
+/* Champs et boutons supplémentaires */
+.input-ctrl {
+  appearance: none;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  padding: 5px 9px;
+  font-size: 13px;
+  width: 9.5em;
+}
+.btn[hidden], [hidden] { display: none !important; }
+
+/* Boîte de dialogue */
+.dialog {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 0;
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  background: #0c3a21;
+  color: #fff;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+}
+.dialog::backdrop { background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(2px); }
+.dialog-inner { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px 18px; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.dialog-head h2 { margin: 0; font-size: 18px; }
+.dialog-section { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.12); display: flex; flex-direction: column; gap: 9px; }
+.dialog-section h3 { margin: 0; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--gold-accent); }
+.field { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.field input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--gold-accent); }
+.field-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.field-info { color: rgba(255, 255, 255, 0.78); font-size: 12.5px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0; }
+.stats-grid div { background: rgba(0, 0, 0, 0.28); border-radius: 8px; padding: 8px 10px; }
+.stats-grid dt { font-size: 11.5px; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.4px; }
+.stats-grid dd { margin: 2px 0 0; font-size: 17px; font-weight: 700; color: var(--gold-accent); font-variant-numeric: tabular-nums; }
+
+/* Notifications */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(46px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 9px 12px;
+  background: rgba(8, 40, 22, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+  z-index: 200;
+}
+
+.deal-badge { color: var(--gold-accent); font-weight: 600; }
+
+/* Mouvement réduit */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Mode installé : plein écran sans barre de navigation */
+@media (display-mode: standalone) {
+  .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+}
+
+@media (max-width: 640px) {
+  .controls .btn { padding: 5px 8px; font-size: 12px; }
+  .deal-badge { display: inline; }
+}

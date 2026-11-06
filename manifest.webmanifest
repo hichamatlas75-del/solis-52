@@ -1,0 +1,29 @@
+{
+  "id": "./",
+  "name": "Solis 52",
+  "short_name": "Solis 52",
+  "description": "Jeu de patience à 7 colonnes sur tapis de feutre. Jouable hors ligne.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./index.html?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#084c25",
+  "theme_color": "#0b5d2f",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouvelle partie",
+      "short_name": "Nouvelle",
+      "url": "./index.html?new=1&source=shortcut",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

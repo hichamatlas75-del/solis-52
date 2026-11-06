@@ -2,21 +2,30 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Solis 52 : jeu de cartes de patience classique à 7 colonnes sur tapis de feutre." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Solis 52 : jeu de cartes de patience classique à 7 colonnes sur tapis de feutre. Installable et jouable hors ligne." />
+  <meta name="theme-color" content="#0b5d2f" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Solis 52" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Solis 52</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body data-felt="classic" data-cardback="blue">
 
-  <!-- Top Bar -->
+  <!-- Barre supérieure -->
   <header class="topbar">
     <h1 class="brand">
-      <span class="brand-icon">☀</span>
+      <span class="brand-icon" aria-hidden="true">☀</span>
       <span>Solis 52</span>
     </h1>
 
-    <div class="stats-bar">
+    <div class="stats-bar" aria-label="Score, temps et coups">
       <div class="stat-item">
         <span class="stat-label">Score</span>
         <span class="stat-value" id="score-val">0</span>
@@ -32,67 +41,48 @@
     </div>
 
     <div class="controls">
-      <select id="draw-mode" class="select-ctrl" title="Mode de tirage">
+      <select id="draw-mode" class="select-ctrl" title="Mode de tirage" aria-label="Mode de tirage">
         <option value="1">Tirage 1 carte</option>
         <option value="3">Tirage 3 cartes</option>
       </select>
 
-      <select id="felt-theme" class="select-ctrl" title="Couleur du tapis">
-        <option value="classic">Tapis Classique</option>
-        <option value="royal">Émeraude Casino</option>
-        <option value="midnight">Bleu Nuit</option>
-      </select>
-
-      <button id="btn-autocomplete" class="btn btn-gold" style="display: none;">
-        ⚡ Terminer auto
-      </button>
-
-      <button id="btn-undo" class="btn" disabled title="Annuler le dernier coup (Ctrl+Z)">
-        ↩ Annuler
-      </button>
-
-      <button id="btn-hint" class="btn" title="Afficher un indice (H)">
-        💡 Indice
-      </button>
-
-      <button id="btn-new" class="btn" title="Distribuer une nouvelle partie (N)">
-        🃏 Nouvelle partie
-      </button>
+      <button id="btn-autocomplete" class="btn btn-gold" style="display: none;">⚡ Terminer auto</button>
+      <button id="btn-undo" class="btn" disabled title="Annuler (Ctrl+Z)">↩ Annuler</button>
+      <button id="btn-redo" class="btn" disabled title="Rétablir (Ctrl+Y)">↪ Rétablir</button>
+      <button id="btn-hint" class="btn" title="Indice (H)">💡 Indice</button>
+      <button id="btn-new" class="btn" title="Nouvelle partie (N)">🃏 Nouvelle partie</button>
+      <button id="btn-menu" class="btn" title="Réglages, statistiques et installation" aria-haspopup="dialog">☰ Menu</button>
     </div>
   </header>
 
-  <!-- Solitaire Play Table -->
+  <!-- Plateau -->
   <main class="table-wrap">
-    <!-- Top Row: Stock, Waste, Empty Spacer, 4 Foundations -->
-    <section class="top-zone">
-      <div id="stock-slot" class="slot stock-slot" title="Cliquer pour piocher ou recycler">
+    <section class="top-zone" aria-label="Pioche, défausse et fondations">
+      <div id="stock-slot" class="slot stock-slot" role="button" tabindex="0" aria-label="Pioche" title="Cliquer pour piocher ou recycler">
         <div class="slot-watermark">
           <div class="stock-recycle-icon">↻</div>
         </div>
       </div>
 
-      <div id="waste-slot" class="slot waste-slot"></div>
+      <div id="waste-slot" class="slot waste-slot" aria-label="Défausse"></div>
 
-      <!-- Spacer Column -->
       <div class="spacer-slot"></div>
 
-      <!-- 4 Foundations -->
-      <div class="slot foundation-slot" id="foundation-0" data-foundation="0" data-suit="♠">
+      <div class="slot foundation-slot" id="foundation-0" data-foundation="0" data-suit="♠" aria-label="Fondation pique">
         <div class="slot-watermark">♠</div>
       </div>
-      <div class="slot foundation-slot" id="foundation-1" data-foundation="1" data-suit="♥">
+      <div class="slot foundation-slot" id="foundation-1" data-foundation="1" data-suit="♥" aria-label="Fondation cœur">
         <div class="slot-watermark red-watermark">♥</div>
       </div>
-      <div class="slot foundation-slot" id="foundation-2" data-foundation="2" data-suit="♣">
+      <div class="slot foundation-slot" id="foundation-2" data-foundation="2" data-suit="♣" aria-label="Fondation trèfle">
         <div class="slot-watermark">♣</div>
       </div>
-      <div class="slot foundation-slot" id="foundation-3" data-foundation="3" data-suit="♦">
+      <div class="slot foundation-slot" id="foundation-3" data-foundation="3" data-suit="♦" aria-label="Fondation carreau">
         <div class="slot-watermark red-watermark">♦</div>
       </div>
     </section>
 
-    <!-- Bottom Row: 7 Tableau Columns -->
-    <section class="tableau-zone" id="tableau-zone">
+    <section class="tableau-zone" id="tableau-zone" aria-label="Colonnes du tableau">
       <div class="tableau-col" id="tableau-col-0" data-col="0"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
       <div class="tableau-col" id="tableau-col-1" data-col="1"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
       <div class="tableau-col" id="tableau-col-2" data-col="2"><div class="slot"><div class="slot-watermark king-watermark">K</div></div></div>
@@ -103,32 +93,97 @@
     </section>
   </main>
 
-  <!-- Floating Drag Layer -->
   <div id="drag-layer"></div>
-
-  <!-- Bouncing Cards Victory Canvas -->
   <canvas id="victory-canvas"></canvas>
 
-  <!-- Victory Modal -->
-  <div id="victory-banner" class="victory-banner">
-    <h2 class="victory-title">🏆 Félicitations !</h2>
+  <!-- Victoire -->
+  <div id="victory-banner" class="victory-banner" role="dialog" aria-labelledby="victory-title">
+    <h2 class="victory-title" id="victory-title">🏆 Félicitations !</h2>
     <div class="victory-stats" id="victory-stats"></div>
-    <button id="btn-victory-new" class="btn btn-gold">
-      🃏 Rejouer une partie
-    </button>
+    <button id="btn-victory-new" class="btn btn-gold">🃏 Rejouer une partie</button>
   </div>
 
-  <!-- Footer Status Bar -->
+  <!-- Menu : réglages, statistiques, installation -->
+  <dialog id="dlg-menu" class="dialog" aria-labelledby="menu-title">
+    <form method="dialog" class="dialog-inner">
+      <header class="dialog-head">
+        <h2 id="menu-title">Menu</h2>
+        <button class="btn" value="close" aria-label="Fermer">✕</button>
+      </header>
+
+      <section class="dialog-section">
+        <h3>Partie</h3>
+        <label class="field"><input type="checkbox" id="opt-winnable" /> <span>Donnes toujours gagnables (vérifiées par le solveur)</span></label>
+        <div class="field-row">
+          <span class="field-info" id="deal-info">Donne —</span>
+        </div>
+        <div class="field-row">
+          <button type="button" class="btn" id="btn-replay">🔁 Rejouer la même donne</button>
+          <button type="button" class="btn" id="btn-share">🔗 Copier le lien de la donne</button>
+        </div>
+        <div class="field-row">
+          <label for="seed-input">N° de donne</label>
+          <input id="seed-input" class="input-ctrl" type="number" min="1" max="999999999" inputmode="numeric" placeholder="ex. 123456" />
+          <button type="button" class="btn" id="btn-play-seed">Jouer</button>
+        </div>
+      </section>
+
+      <section class="dialog-section">
+        <h3>Apparence et accessibilité</h3>
+        <div class="field-row">
+          <label for="felt-theme">Tapis</label>
+          <select id="felt-theme" class="select-ctrl">
+            <option value="classic">Tapis Classique</option>
+            <option value="royal">Émeraude Casino</option>
+            <option value="midnight">Bleu Nuit</option>
+          </select>
+          <label for="cardback">Dos</label>
+          <select id="cardback" class="select-ctrl">
+            <option value="blue">Bleu</option>
+            <option value="crimson">Carmin</option>
+          </select>
+        </div>
+        <label class="field"><input type="checkbox" id="opt-fourcolor" /> <span>Enseignes en 4 couleurs (daltonisme)</span></label>
+        <label class="field"><input type="checkbox" id="opt-sound" /> <span>Effets sonores</span></label>
+      </section>
+
+      <section class="dialog-section">
+        <h3>Statistiques</h3>
+        <dl class="stats-grid" id="stats-grid"></dl>
+        <button type="button" class="btn" id="btn-reset-stats">Réinitialiser les statistiques</button>
+      </section>
+
+      <section class="dialog-section">
+        <h3>Application</h3>
+        <div class="field-row">
+          <button type="button" class="btn btn-gold" id="btn-install" hidden>⬇ Installer Solis 52</button>
+          <span class="field-info" id="install-info"></span>
+        </div>
+      </section>
+    </form>
+  </dialog>
+
+  <!-- Notifications -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-msg"></span>
+    <button class="btn btn-gold" id="toast-action" hidden></button>
+    <button class="btn" id="toast-close" aria-label="Fermer">✕</button>
+  </div>
+
+  <!-- Barre d'état -->
   <footer class="statusbar">
-    <div id="status-msg">Prêt — Glissez-déposez les cartes ou double-cliquez pour envoyer vers les fondations.</div>
+    <div id="status-msg" role="status" aria-live="polite">Prêt — glissez-déposez les cartes ou touchez deux fois pour envoyer vers les fondations.</div>
     <div class="status-shortcuts">
-      <span><kbd class="kbd">Double-clic</kbd> / <kbd class="kbd">Clic droit</kbd> Auto-envoi</span>
-      <span><kbd class="kbd">Ctrl+Z</kbd> Annuler</span>
+      <span id="deal-badge" class="deal-badge"></span>
+      <span><kbd class="kbd">Double-clic</kbd> Auto-envoi</span>
+      <span><kbd class="kbd">Ctrl+Z</kbd>/<kbd class="kbd">Ctrl+Y</kbd></span>
       <span><kbd class="kbd">H</kbd> Indice</span>
-      <span><kbd class="kbd">N</kbd> Nouvelle partie</span>
+      <span><kbd class="kbd">N</kbd> Nouvelle</span>
     </div>
   </footer>
 
+  <script src="rules.js"></script>
+  <script src="storage.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

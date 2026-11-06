@@ -1,0 +1,10 @@
+{
+  "name": "solis-52",
+  "version": "2.0.0",
+  "description": "Solis 52 — jeu de patience à 7 colonnes (PWA installable)",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
