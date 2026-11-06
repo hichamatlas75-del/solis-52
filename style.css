@@ -2,12 +2,15 @@
   --felt-primary: #0f6b38;
   --felt-secondary: #084c25;
   --felt-border: #06381b;
-  --card-w: clamp(68px, 11.2vw, 108px);
-  --card-h: calc(var(--card-w) * 1.4);
-  --card-radius: clamp(5px, 0.7vw, 8px);
-  --col-gap: clamp(8px, 1.6vw, 18px);
-  --stack-offset-down: clamp(10px, 1.4vw, 16px);
-  --stack-offset-up: clamp(22px, 2.7vw, 30px);
+  --vw: 100vw;
+  --board-pad-x: clamp(6px, 1.8vw, 18px);
+  --safe-x: max(var(--board-pad-x), env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  --col-gap: clamp(4px, 1.2vw, 18px);
+  --card-w: min(108px, calc((var(--vw) - 2 * var(--safe-x) - 6 * var(--col-gap)) / 7));
+  --card-h: calc(var(--card-w) * 1.42);
+  --card-radius: clamp(4px, 0.7vw, 8px);
+  --stack-offset-down: clamp(7px, calc(var(--card-w) * 0.16), 16px);
+  --stack-offset-up: clamp(18px, calc(var(--card-w) * 0.28), 30px);
   --red-suit: #d31920;
   --black-suit: #14171a;
   --gold-accent: #f3c64d;
@@ -187,9 +190,10 @@ html, body {
 
 /* Main Solitaire Board */
 .table-wrap {
-  max-width: calc(var(--card-w) * 7 + var(--col-gap) * 6 + 36px);
+  width: 100%;
+  max-width: calc(var(--card-w) * 7 + var(--col-gap) * 6 + 2 * var(--safe-x));
   margin: 0 auto;
-  padding: 16px 18px 60px;
+  padding: 16px var(--safe-x) 60px;
   position: relative;
   z-index: 5;
 }
@@ -402,10 +406,10 @@ html, body {
 /* Center Inner Area of Face-Up Card */
 .card-center {
   position: absolute;
-  top: 16%;
-  bottom: 16%;
-  left: 20%;
-  right: 20%;
+  top: 19%;
+  bottom: 19%;
+  left: 22%;
+  right: 22%;
   border-radius: 3px;
   pointer-events: none;
   display: flex;
@@ -611,19 +615,65 @@ html, body {
 @media (max-width: 640px) {
   .topbar {
     padding: 6px 10px;
+    gap: 6px;
+  }
+  .stats-bar {
+    padding: 4px 10px;
+    gap: 10px;
+    font-size: 12px;
   }
   .status-shortcuts {
     display: none;
   }
   .table-wrap {
-    padding: 10px 6px 50px;
+    padding: 10px var(--safe-x) 50px;
+  }
+}
+
+/* Cartes compactes sur écrans étroits (7 colonnes + 4 fondations visibles) */
+@media (max-width: 560px) {
+  .slot {
+    border-width: 1.5px;
+  }
+  .card.face-down {
+    padding: 2.5px;
+  }
+  .card-corner {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 1px;
+    letter-spacing: -0.6px;
+  }
+  .card-corner.top-left {
+    top: 2px;
+    left: 3px;
+  }
+  .card-corner.bottom-right {
+    bottom: 2px;
+    right: 3px;
+  }
+  .corner-rank {
+    font-size: clamp(11px, calc(var(--card-w) * 0.25), 14px);
+  }
+  .corner-suit {
+    font-size: clamp(10px, calc(var(--card-w) * 0.21), 13px);
+    margin-top: 0;
+  }
+  .card-center {
+    top: 23%;
+    bottom: 23%;
+    left: 13%;
+    right: 13%;
+  }
+  .pips-grid {
+    font-size: calc(var(--card-w) * 0.19);
   }
 }
 
 /* ===== PWA, accessibilité et nouvelles fonctionnalités ===== */
 
 /* Encoches / barres système (mode installé) */
-.topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+.topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
 .statusbar { padding-bottom: max(5px, env(safe-area-inset-bottom)); }
 
 /* Focus clavier visible */
@@ -639,6 +689,8 @@ body[data-fourcolor="on"] .card[data-suit="♣"] { color: #0a7a2f; }
 body[data-fourcolor="on"] .card[data-suit="♦"] { color: #1558c0; }
 body[data-fourcolor="on"] .card[data-suit="♥"] { color: #d31920; }
 body[data-fourcolor="on"] .card[data-suit="♠"] { color: #14171a; }
+body[data-fourcolor="on"] .foundation-slot[data-suit="♣"] .slot-watermark { color: rgba(90, 235, 135, 0.30); }
+body[data-fourcolor="on"] .foundation-slot[data-suit="♦"] .slot-watermark { color: rgba(110, 175, 255, 0.32); }
 
 /* Retournement d'une carte */
 @keyframes cardFlip {
@@ -722,6 +774,6 @@ body[data-fourcolor="on"] .card[data-suit="♠"] { color: #14171a; }
 }
 
 @media (max-width: 640px) {
-  .controls .btn { padding: 5px 8px; font-size: 12px; }
+  .controls .btn, .controls .select-ctrl { padding: 5px 8px; font-size: 12px; }
   .deal-badge { display: inline; }
 }

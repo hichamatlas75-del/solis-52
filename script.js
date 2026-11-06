@@ -553,11 +553,12 @@
     if (state.waste.length) {
       const visible = state.drawCount === 3 ? Math.min(3, state.waste.length) : 1;
       const start = state.waste.length - visible;
+      const fanStep = Math.round(Math.min(18, (stockSlot.offsetWidth || 60) * 0.28));
       for (let i = 0; i < visible; i++) {
         const card = state.waste[start + i];
         const isTop = i === visible - 1;
         const el = createCardElement(card);
-        el.style.left = `${i * 18}px`;
+        el.style.left = `${i * fanStep}px`;
         el.style.zIndex = i + 1;
         if (isTop) {
           const src = { zone: 'waste', index: state.waste.length - 1 };
@@ -1065,10 +1066,16 @@
   });
   window.addEventListener('pagehide', persist);
 
+  function syncViewportWidth() {
+    const w = document.documentElement.clientWidth || window.innerWidth;
+    if (w > 0) document.documentElement.style.setProperty('--vw', `${w}px`);
+  }
+
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
+      syncViewportWidth();
       noAnimateNext = true;
       render();
       if (cascadeAnimId) sizeVictoryCanvas();
@@ -1077,6 +1084,7 @@
 
   /* ---------- Démarrage ---------- */
   function start() {
+    syncViewportWidth();
     applySettings();
     lastDrawMode = drawModeSelect.value;
     registerServiceWorker();
