@@ -565,6 +565,26 @@ html, body {
   }
 }
 
+/* Feedback visuel lors du tap sur l'écran / feutre pour piocher */
+.tap-draw-ripple {
+  position: fixed;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  border: 2px solid rgba(243, 198, 77, 0.85);
+  background: radial-gradient(circle, rgba(243, 198, 77, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 999;
+  animation: tapDrawAnim 0.35s ease-out forwards;
+}
+
+@keyframes tapDrawAnim {
+  0% { transform: scale(0.3); opacity: 1; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
 /* Floating Drag Layer */
 #drag-layer {
   position: fixed;

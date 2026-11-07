@@ -50,6 +50,7 @@
   let flipIds = new Set();
   let dealtIds = new Set();
   let dragSession = null;
+  let dragEndedTime = 0;
   let lastTap = { key: null, time: 0 };
   let audioCtx = null;
 
@@ -1136,6 +1137,7 @@
     dragSession = null;
 
     if (session.isDragging) {
+      dragEndedTime = Date.now();
       const target = findBestDropTarget(e.clientX, e.clientY, session.source, session.movingCards);
       noAnimateNext = true;
       if (target && doMove(session.source, target)) return;
@@ -1164,6 +1166,7 @@
   }
 
   function onPointerCancel() {
+    dragEndedTime = Date.now();
     endDrag();
     dragSession = null;
     render();
@@ -1173,6 +1176,7 @@
     slot.addEventListener('click', (e) => {
       if (e.target.closest('.card')) return;
       if (activeGame === 'klondike' && selectedSource) {
+        e.stopPropagation();
         const moving = R.getMovingCards(state, selectedSource);
         if (moving.length === 1) {
           const targetF = R.SUIT_INDEX[moving[0].suit];
@@ -1188,30 +1192,74 @@
   tableauCols.forEach((colEl, c) => {
     colEl.addEventListener('click', (e) => {
       if (e.target.closest('.card')) return;
-      if (activeGame === 'klondike' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c });
+      if (activeGame === 'klondike' && selectedSource) {
+        e.stopPropagation();
+        doMove(selectedSource, { zone: 'tableau', col: c });
+      }
     });
   });
   spiderCols.forEach((colEl, c) => {
     colEl.addEventListener('click', (e) => {
       if (e.target.closest('.card')) return;
-      if (activeGame === 'spider' && selectedSource) doMove(selectedSource, { zone: 'tableau', col: c });
+      if (activeGame === 'spider' && selectedSource) {
+        e.stopPropagation();
+        doMove(selectedSource, { zone: 'tableau', col: c });
+      }
     });
   });
 
-  document.body.addEventListener('click', (e) => {
-    const cl = e.target.classList;
-    if ((e.target === document.body || cl.contains('table-wrap') || cl.contains('tableau-zone')) && selectedSource) {
+  function spawnTapFeedback(x, y) {
+    if (reducedMotion()) return;
+    const ripple = document.createElement('div');
+    ripple.className = 'tap-draw-ripple';
+    ripple.style.left = `${x}px`;
+    ripple.style.top = `${y}px`;
+    document.body.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove());
+  }
+
+  function handleScreenTapToDraw(e) {
+    if (!state || state.won || isAutoCompleting) return;
+    if (Date.now() - dragEndedTime < 300) return;
+
+    // Do not draw if clicking on interactive controls, dialogs, toasts, cards, or stock slots
+    if (e.target.closest('button, select, input, a, dialog, .dlg, .topbar, .statusbar, #toast, #victory-banner, #victory-canvas, .card, #stock-slot, #spider-stock-slot')) {
+      return;
+    }
+
+    // If a card is currently selected:
+    if (selectedSource) {
+      // If clicking inside a tableau column or foundation slot, the column/slot click handler will handle the move
+      if (e.target.closest('.tableau-col, .foundation-slot, .spider-col, .spider-foundation-slot')) {
+        return;
+      }
+      // If clicking empty felt outside valid slots, cancel card selection
       selectedSource = null;
       render();
+      return;
     }
-  });
 
-  stockSlot.addEventListener('click', () => { if (activeGame === 'klondike' && !state.won && !isAutoCompleting) doDraw(); });
+    // No card is selected: tapping on empty screen / felt / board generates a new card!
+    if (e.clientX && e.clientY) {
+      spawnTapFeedback(e.clientX, e.clientY);
+    }
+    doDraw();
+  }
+
+  document.addEventListener('click', handleScreenTapToDraw);
+
+  stockSlot.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activeGame === 'klondike' && !state.won && !isAutoCompleting) doDraw();
+  });
   stockSlot.addEventListener('keydown', (e) => {
     if (activeGame === 'klondike' && (e.key === 'Enter' || e.key === ' ') && !state.won && !isAutoCompleting) { e.preventDefault(); doDraw(); }
   });
 
-  spiderStockSlot.addEventListener('click', () => { if (activeGame === 'spider' && !state.won) doSpiderDealRow(); });
+  spiderStockSlot.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activeGame === 'spider' && !state.won) doSpiderDealRow();
+  });
   spiderStockSlot.addEventListener('keydown', (e) => {
     if (activeGame === 'spider' && (e.key === 'Enter' || e.key === ' ') && !state.won) { e.preventDefault(); doSpiderDealRow(); }
   });
@@ -1505,6 +1553,12 @@
     else if (mod || e.altKey) return;
     else if (key === 'h') showHint();
     else if (key === 'n') confirmNewGame();
+    else if (key === 'd' || key === ' ') {
+      if (!state.won && !isAutoCompleting) {
+        e.preventDefault();
+        doDraw();
+      }
+    }
   });
 
   document.addEventListener('visibilitychange', () => {

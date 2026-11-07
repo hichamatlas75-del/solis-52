@@ -21,7 +21,7 @@ Le sélecteur d'onglets en haut permet de basculer instantanément entre **Class
 - **Numéro de donne** reproductible, bouton **« Rejouer la même donne »** et lien de partage (`?game=spider&suits=2&seed=123456`).
 - **Annuler / Rétablir** (`Ctrl+Z` / `Ctrl+Y`), **indice intelligent** (`H`), détection de **partie bloquée**.
 - **Statistiques séparées** par jeu (parties, victoires, séries, meilleurs score/temps/coups) et **sauvegarde automatique** indépendante.
-- Glisser-déposer fluide, tap pour sélectionner, **double-clic / double-tap** pour l'envoi automatique, adaptation **100 % mobile** (7 et 10 colonnes sans débordement horizontal).
+- Glisser-déposer fluide, tap pour sélectionner, **tap n’importe où sur l’écran/feutre pour piocher** (raccourci `D` ou Espace), **double-clic / double-tap** pour l'envoi automatique, adaptation **100 % mobile** (7 et 10 colonnes sans débordement horizontal).
 - 3 tapis, 2 dos de cartes, mode **4 couleurs** (daltonisme), sons optionnels, cascade de victoire, pause auto du chrono.
 - **PWA** : `manifest.webmanifest` + icônes *maskable*, service worker (`sw.js`) hors ligne et raccourcis directs Classique / Spider.
 
